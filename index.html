@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control de Schedule y Flota</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚚</text></svg>">
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<section id="login" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">🚚</div>
+    <h1 id="loginEmpresa">Control de Schedule y Flota</h1>
+    <p class="muted">Entra como administrador para editar, o como consulta para solo revisar información.</p>
+
+    <div class="login-tabs">
+      <button class="ltab active" data-mode="admin">Administrador</button>
+      <button class="ltab" data-mode="guest">Consulta</button>
+    </div>
+
+    <form id="loginForm" class="login-form">
+      <div id="adminFields">
+        <label>Contraseña de administrador
+          <input type="password" id="loginPass" autocomplete="current-password" placeholder="••••••••">
+        </label>
+      </div>
+      <div id="guestFields" class="hidden">
+        <label>Tu nombre (opcional)
+          <input type="text" id="guestName" placeholder="Ej. Juan Pérez">
+        </label>
+        <p class="hint">Modo consulta: puedes ver el schedule, la disponibilidad y el inventario, pero no modificar nada.</p>
+      </div>
+      <p id="loginError" class="error hidden"></p>
+      <button class="btn primary block" type="submit">Entrar</button>
+    </form>
+    <p class="hint" id="firstRunHint"></p>
+  </div>
+</section>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-logo">🚚</span>
+      <div>
+        <strong id="empresaNombre">Mi Compañía de Transportes</strong>
+        <span class="muted small" id="empresaSub">Panel de control</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="roleBadge" class="badge">Consulta</span>
+      <button class="btn ghost" id="themeBtn" title="Cambiar tema">🌓</button>
+      <button class="btn ghost" id="logoutBtn">Salir</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="panel">Panel</button>
+    <button class="tab" data-view="schedule">Schedule</button>
+    <button class="tab" data-view="inventario">Inventario</button>
+    <button class="tab" data-view="conductores">Conductores</button>
+    <button class="tab" data-view="plantillas">Plantillas</button>
+    <button class="tab" data-view="datos">Datos y Ajustes</button>
+  </nav>
+
+  <main class="content">
+    <!-- PANEL -->
+    <section id="view-panel" class="view">
+      <div class="cards" id="kpis"></div>
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Viajes de hoy y mañana</h2>
+          <div id="panelHoy"></div>
+        </div>
+        <div class="panel">
+          <h2>Disponibilidad ahora</h2>
+          <div id="panelDisp"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Avisos</h2>
+        <div id="panelAvisos"></div>
+      </div>
+    </section>
+
+    <!-- SCHEDULE -->
+    <section id="view-schedule" class="view hidden">
+      <div class="toolbar">
+        <div class="periodo">
+          <button class="btn ghost" id="prevPeriodo">‹</button>
+          <button class="btn ghost" id="hoyBtn">Hoy</button>
+          <button class="btn ghost" id="nextPeriodo">›</button>
+          <strong id="periodoLabel"></strong>
+        </div>
+        <div class="seg" id="vistaSeg">
+          <button class="segbtn active" data-vista="semana">Semana</button>
+          <button class="segbtn" data-vista="mes">Mes</button>
+          <button class="segbtn" data-vista="lista">Lista</button>
+        </div>
+        <div class="spacer"></div>
+        <input type="search" id="buscarViaje" placeholder="Buscar cliente, ruta, unidad…">
+        <select id="filtroEstado">
+          <option value="">Todos los estados</option>
+        </select>
+        <select id="filtroUnidad"><option value="">Todas las unidades</option></select>
+        <select id="filtroConductor"><option value="">Todos los conductores</option></select>
+        <button class="btn admin-only" id="generarPlantillaBtn">Generar desde plantilla</button>
+        <button class="btn primary admin-only" id="nuevoViajeBtn">+ Nuevo viaje</button>
+        <button class="btn ghost" id="exportViajesBtn">Exportar CSV</button>
+      </div>
+      <div id="scheduleBody"></div>
+    </section>
+
+    <!-- INVENTARIO -->
+    <section id="view-inventario" class="view hidden">
+      <div class="toolbar">
+        <input type="search" id="buscarUnidad" placeholder="Buscar unidad, placa, tipo…">
+        <select id="filtroEstadoUnidad"><option value="">Todos los estados</option></select>
+        <div class="spacer"></div>
+        <button class="btn primary admin-only" id="nuevaUnidadBtn">+ Nueva unidad</button>
+        <button class="btn admin-only" id="importUnidadBtn">Importar CSV</button>
+        <button class="btn ghost" id="exportUnidadBtn">Exportar CSV</button>
+      </div>
+      <div class="panel"><div id="tablaUnidades"></div></div>
+    </section>
+
+    <!-- CONDUCTORES -->
+    <section id="view-conductores" class="view hidden">
+      <div class="toolbar">
+        <input type="search" id="buscarConductor" placeholder="Buscar conductor, licencia…">
+        <select id="filtroEstadoConductor"><option value="">Todos los estados</option></select>
+        <div class="spacer"></div>
+        <button class="btn primary admin-only" id="nuevoConductorBtn">+ Nuevo conductor</button>
+        <button class="btn admin-only" id="importConductorBtn">Importar CSV</button>
+        <button class="btn ghost" id="exportConductorBtn">Exportar CSV</button>
+      </div>
+      <div class="panel"><div id="tablaConductores"></div></div>
+    </section>
+
+    <!-- PLANTILLAS -->
+    <section id="view-plantillas" class="view hidden">
+      <div class="toolbar">
+        <p class="muted">Las plantillas son rutas que se repiten (ej. Lunes y Miércoles, Hermosillo → Nogales). Se usan para generar el schedule de una semana o un mes completo.</p>
+        <div class="spacer"></div>
+        <button class="btn primary admin-only" id="nuevaPlantillaBtn">+ Nueva plantilla</button>
+        <button class="btn admin-only" id="generarPlantillaBtn2">Generar viajes</button>
+      </div>
+      <div class="panel"><div id="tablaPlantillas"></div></div>
+    </section>
+
+    <!-- DATOS -->
+    <section id="view-datos" class="view hidden">
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Respaldo de toda la información</h2>
+          <p class="muted">Toda la información se guarda en este navegador. Descarga un respaldo para no perderla y para pasarla a otra computadora.</p>
+          <div class="row">
+            <button class="btn primary" id="backupBtn">Descargar respaldo (.json)</button>
+            <button class="btn admin-only" id="restoreBtn">Restaurar respaldo</button>
+          </div>
+          <p class="hint" id="ultimoGuardado"></p>
+        </div>
+        <div class="panel admin-only">
+          <h2>Datos de la compañía</h2>
+          <form id="empresaForm" class="form">
+            <label>Nombre de la compañía<input type="text" id="cfgEmpresa"></label>
+            <label>Dispatch a cargo<input type="text" id="cfgDispatch"></label>
+            <label>Teléfono / contacto<input type="text" id="cfgContacto"></label>
+            <button class="btn primary" type="submit">Guardar</button>
+          </form>
+        </div>
+        <div class="panel admin-only">
+          <h2>Contraseña de administrador</h2>
+          <form id="passForm" class="form">
+            <label>Contraseña actual<input type="password" id="passActual" autocomplete="current-password"></label>
+            <label>Nueva contraseña<input type="password" id="passNueva" autocomplete="new-password"></label>
+            <label>Repetir nueva contraseña<input type="password" id="passNueva2" autocomplete="new-password"></label>
+            <button class="btn primary" type="submit">Cambiar contraseña</button>
+          </form>
+          <p class="hint">Aviso: esta protección evita ediciones accidentales de quien consulta la página, pero no es seguridad de nivel servidor. No guardes aquí información confidencial.</p>
+        </div>
+        <div class="panel admin-only">
+          <h2>Catálogos</h2>
+          <p class="muted">Personaliza las opciones que aparecen en los formularios.</p>
+          <form id="catalogosForm" class="form">
+            <label>Estados de viaje (separados por coma)<input type="text" id="catEstadosViaje"></label>
+            <label>Estados de unidad<input type="text" id="catEstadosUnidad"></label>
+            <label>Tipos de unidad<input type="text" id="catTiposUnidad"></label>
+            <label>Estados de conductor<input type="text" id="catEstadosConductor"></label>
+            <button class="btn primary" type="submit">Guardar catálogos</button>
+          </form>
+        </div>
+        <div class="panel admin-only danger-zone">
+          <h2>Zona de riesgo</h2>
+          <p class="muted">Borra información. No se puede deshacer (salvo que tengas respaldo).</p>
+          <div class="row">
+            <button class="btn danger" id="borrarViajesBtn">Borrar viajes de un rango</button>
+            <button class="btn danger" id="resetBtn">Borrar todo y empezar de cero</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span id="footerInfo"></span>
+  </footer>
+</div>
+
+<!-- MODAL -->
+<div id="modalBack" class="modal-back hidden">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h3 id="modalTitle">Título</h3>
+      <button class="btn ghost" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<input type="file" id="filePicker" class="hidden">
+
+<script src="app.js"></script>
+</body>
+</html>
