@@ -140,7 +140,8 @@ const ESTADO_INICIAL = () => ({
   auth: { hash: '', salt: '', configurada: false },
   usuarios: [],
   catalogos: JSON.parse(JSON.stringify(CATALOGOS_DEF)),
-  preferencias: { formatoFecha: 'mdy' },
+  preferencias: { formatoFecha: 'mdy', origenPorDefecto: 'Tecate Mx' },
+  formatos: [],
   unidades: [],
   conductores: [],
   clientes: [],
@@ -161,8 +162,8 @@ function cargar() {
       DB.catalogos = Object.assign(JSON.parse(JSON.stringify(CATALOGOS_DEF)), d.catalogos || {});
       DB.empresa = Object.assign({}, EMPRESA_DEF, d.empresa || {});
       DB.auth = Object.assign({ hash: '', salt: '', configurada: false }, d.auth || {});
-      DB.preferencias = Object.assign({ formatoFecha: 'mdy' }, d.preferencias || {});
-      ['unidades', 'conductores', 'clientes', 'viajes', 'plantillas', 'usuarios'].forEach(k => {
+      DB.preferencias = Object.assign({ formatoFecha: 'mdy', origenPorDefecto: 'Tecate Mx' }, d.preferencias || {});
+      ['unidades', 'conductores', 'clientes', 'viajes', 'plantillas', 'usuarios', 'formatos'].forEach(k => {
         if (!Array.isArray(DB[k])) DB[k] = [];
       });
       DB.viajes.forEach(v => {
@@ -207,6 +208,13 @@ async function crearUsuario({ usuario, nombre, rol, clave }) {
 
 /* Se ejecuta una sola vez: crea las cuentas de arranque.
    Si ya había una contraseña de administrador, se conserva en la cuenta principal. */
+/* Formatos de arranque: los dos que ya se usan por correo */
+function sembrarFormatos() {
+  if (Array.isArray(DB.formatos) && DB.formatos.length) return;
+  DB.formatos = FORMATOS_DEF.map(f => Object.assign({ id: uid() }, f));
+  guardar();
+}
+
 async function sembrarUsuarios() {
   if (Array.isArray(DB.usuarios) && DB.usuarios.length) return false;
   DB.usuarios = [];
@@ -1821,6 +1829,260 @@ function renderPanel() {
 }
 
 /* =========================================================
+   PAPELES — comandos que arman el texto para copiar y pegar
+   ========================================================= */
+const FORMATOS_DEF = [
+  {
+    clave: 'expo', nombre: 'Expo (exportación con carga)', creaViaje: true,
+    texto: `Buenos días,
+
+Favor de usar datos para expo a {{destino}},
+
+• Compañía: {{empresa}}
+• Operador: {{operador}}
+• Unidad: {{tractor}}
+• Placas Tractor: {{tractor.placa}}
+
+• Equipo: {{remolque.tipo}}
+• Económico: {{remolque}}
+• Placas: {{remolque.placa}}
+
+• CAAT: {{caat}}
+• SCAC: {{scac}}
+
+• Dirección:
+{{cliente}}
+{{cliente.direccion}}
+{{cliente.ciudad}}, {{cliente.estado}} {{cliente.cp}}`
+  },
+  {
+    clave: 'vacio', nombre: 'Entrada vacío', creaViaje: false,
+    texto: `Buenos días,
+
+Adjunto la información para la entrada vacío,
+
+Compañía: {{empresa}}
+Chofer: {{operador}}
+Placas: {{tractor.placa}}
+Económico: {{tractor}}
+SCAC: {{scac}}
+
+Gracias de antemano.
+
+Saludos,`
+  }
+];
+
+const VARIABLES = [
+  ['empresa', 'Nombre de la compañía'], ['caat', 'CAAT'], ['scac', 'SCAC'],
+  ['operador', 'Nombre del operador'], ['operador.licencia', 'Licencia del operador'],
+  ['operador.telefono', 'Teléfono del operador'],
+  ['tractor', 'Número económico del tractor'], ['tractor.placa', 'Placas del tractor (USA)'],
+  ['tractor.placaMx', 'Placas del tractor (México)'], ['tractor.vin', 'VIN del tractor'],
+  ['tractor.marca', 'Marca y año del tractor'],
+  ['remolque', 'Número de la caja o plataforma'], ['remolque.tipo', 'Tipo de equipo'],
+  ['remolque.placa', 'Placas del remolque (USA)'], ['remolque.placaMx', 'Placas del remolque (México)'],
+  ['cliente', 'Nombre del cliente'], ['cliente.direccion', 'Dirección del cliente'],
+  ['cliente.ciudad', 'Ciudad'], ['cliente.estado', 'Estado'], ['cliente.cp', 'Código postal'],
+  ['cliente.ciudadEstado', 'Ciudad, Estado CP en un renglón'],
+  ['origen', 'Origen del viaje'], ['destino', 'Destino'], ['fecha', 'Fecha del viaje'],
+  ['facturas', 'Facturas / referencia']
+];
+
+/* Ciudad y estado como se escriben en la hoja: "Ontario Ca", "Houston Tx" */
+function lugarDeCliente(cli) {
+  if (!cli || !cli.ciudad) return '';
+  const edo = String(cli.estado || '').trim();
+  return (cli.ciudad + ' ' + (edo ? edo[0].toUpperCase() + edo.slice(1).toLowerCase() : '')).trim();
+}
+
+/* Arma los datos con los que se llena un formato */
+function datosDelComando(v) {
+  const u = unidad(v.unidadId) || {}, r = unidad(v.remolqueId) || {}, c = conductor(v.conductorId) || {};
+  const cli = DB.clientes.find(x => sinAcentos(x.nombre) === sinAcentos(v.cliente)) || {};
+  const ciudadEstado = [cli.ciudad, [cli.estado, cli.cp].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  return {
+    empresa: DB.empresa.nombre || '', caat: DB.empresa.caat || '', scac: DB.empresa.scac || '',
+    operador: c.nombre || '', 'operador.licencia': c.licencia || '', 'operador.telefono': c.telefono || '',
+    tractor: u.numero || '', 'tractor.placa': u.placa || '', 'tractor.placaMx': u.placaMx || '',
+    'tractor.vin': u.vin || '', 'tractor.marca': [u.marca, u.anio].filter(Boolean).join(' '),
+    remolque: r.numero || '', 'remolque.tipo': r.tipo || '',
+    'remolque.placa': r.placa || '', 'remolque.placaMx': r.placaMx || '',
+    cliente: cli.nombre || v.cliente || '', 'cliente.direccion': cli.direccion || '',
+    'cliente.ciudad': cli.ciudad || '', 'cliente.estado': cli.estado || '', 'cliente.cp': cli.cp || '',
+    'cliente.ciudadEstado': ciudadEstado,
+    origen: v.origen || '', destino: v.destino || lugarDeCliente(cli), fecha: fechaCorta(v.fecha),
+    facturas: v.facturas || ''
+  };
+}
+
+/* Sustituye {{campos}}; los renglones que se quedan sin ningún dato se caen solos */
+function armarTexto(plantilla, datos) {
+  const faltantes = new Set();
+  const lineas = String(plantilla).split('\n').map(linea => {
+    let uso = 0, lleno = 0;
+    const salida = linea.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, clave) => {
+      uso++;
+      const val = datos[clave];
+      if (val) { lleno++; return val; }
+      faltantes.add(clave);
+      return '';
+    });
+    if (uso && !lleno) return null;                       // renglón sin datos: se quita
+    /* La limpieza de comas sueltas solo aplica donde faltó un dato,
+       para no comerse las comas que el formato lleva a propósito. */
+    return (uso > lleno ? salida.replace(/\s+,/g, ',').replace(/,\s*$/, '') : salida).replace(/[ \t]+$/, '');
+  }).filter(l => l !== null);
+  return { texto: lineas.join('\n').replace(/\n{3,}/g, '\n\n').trim(), faltantes: [...faltantes] };
+}
+
+let ultimoViajeGenerado = null;
+
+function ejecutarComando(textoComando) {
+  const cont = $('#resultadoPapeles');
+  const bruto = String(textoComando || '').trim();
+  if (!bruto) return;
+  const partes = bruto.split(/\s+/);
+  const clave = sinAcentos(partes[0]);
+  const formato = DB.formatos.find(f => sinAcentos(f.clave) === clave);
+  if (!formato) {
+    cont.innerHTML = `<div class="panel"><p class="error">No conozco el comando "${esc(partes[0])}".</p>
+      <p class="muted">Comandos disponibles: ${DB.formatos.map(f => `<code>${esc(f.clave)}</code>`).join(', ')}.</p></div>`;
+    return;
+  }
+  const resto = partes.slice(1).join(' ');
+  const v = interpretarLinea(resto);
+  if (!v.origen && DB.preferencias.origenPorDefecto) v.origen = DB.preferencias.origenPorDefecto;
+  /* si el destino quedó siendo el nombre del cliente, se cambia por su ciudad */
+  const cliDir = DB.clientes.find(x => sinAcentos(x.nombre) === sinAcentos(v.destino));
+  if (cliDir && lugarDeCliente(cliDir)) v.destino = lugarDeCliente(cliDir);
+  const datos = datosDelComando(v);
+  const { texto, faltantes } = armarTexto(formato.texto, datos);
+
+  /* El viaje se agrega solo, salvo en los formatos que no lo llevan (vacío) */
+  let nota = '';
+  ultimoViajeGenerado = null;
+  if (formato.creaViaje && sesion.rol === 'admin') {
+    const viaje = Object.assign({ id: uid(), creado: new Date().toISOString(), estatus: {} },
+      (({ _texto, ...r }) => r)(v), { notas: `Generado con el comando "${formato.clave}"` });
+    DB.viajes.push(viaje);
+    guardar(); renderSchedule(); renderPanel(); renderLeyenda(viajesFiltrados());
+    ultimoViajeGenerado = viaje.id;
+    nota = `<p class="chip ok">✓ El viaje quedó agregado al schedule del ${esc(fechaCorta(viaje.fecha))}</p>
+      <button class="btn mini" id="deshacerViajeBtn">Deshacer</button>`;
+  } else if (formato.creaViaje) {
+    nota = '<p class="hint">Tu cuenta es de consulta: el texto se genera, pero el viaje no se agrega al schedule.</p>';
+  } else {
+    nota = '<p class="hint">Este formato no agrega viaje al schedule.</p>';
+  }
+
+  cont.innerHTML = `<div class="panel resultado">
+      <div class="row">
+        <h2 style="margin:0">${esc(formato.nombre)}</h2>
+        <div class="spacer"></div>
+        <button class="btn primary" id="copiarBtn">Copiar texto</button>
+      </div>
+      <pre id="textoGenerado" class="salida">${esc(texto)}</pre>
+      <div class="row">${nota}</div>
+      ${faltantes.length ? `<p class="hint">Faltó información para: ${faltantes.map(f => `<code>${esc(f)}</code>`).join(', ')}.
+        Complétala en la ficha del cliente, de la unidad o del operador y vuelve a generar.</p>` : ''}
+    </div>`;
+
+  $('#copiarBtn').onclick = () => copiarTexto(texto);
+  const deshacer = $('#deshacerViajeBtn');
+  if (deshacer) deshacer.onclick = () => {
+    if (!ultimoViajeGenerado) return;
+    DB.viajes = DB.viajes.filter(x => x.id !== ultimoViajeGenerado);
+    ultimoViajeGenerado = null;
+    guardar(); render();
+    irA('papeles');
+    toast('El viaje se quitó del schedule.');
+  };
+}
+
+async function copiarTexto(texto) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    toast('Texto copiado: ya lo puedes pegar en el correo.');
+  } catch {
+    const pre = $('#textoGenerado');
+    const sel = window.getSelection();
+    const rango = document.createRange();
+    rango.selectNodeContents(pre);
+    sel.removeAllRanges(); sel.addRange(rango);
+    toast('El navegador no dejó copiar solo: el texto ya quedó seleccionado, presiona Ctrl+C.', 5000);
+  }
+}
+
+function editarFormato(id) {
+  if (sesion.rol !== 'admin') return;
+  const ex = id ? DB.formatos.find(f => f.id === id) : null;
+  const f = ex || {};
+  const campos = [
+    { k: 'clave', t: 'Comando (una palabra)', valor: f.clave || '', req: true, ph: 'expo, vacio, pedimento…' },
+    { k: 'nombre', t: 'Nombre del formato', valor: f.nombre || '', req: true },
+    { k: 'creaViaje', t: '¿Agrega el viaje al schedule?', tipo: 'select', vacio: false,
+      valor: f.creaViaje ? 'si' : 'no', opciones: [{ v: 'si', t: 'Sí, agrégalo' }, { v: 'no', t: 'No (como el vacío)' }] },
+    { k: 'texto', t: 'Texto del formato', tipo: 'textarea', valor: f.texto || '', ancho: 'full', req: true }
+  ];
+  abrirModal(ex ? `Formato: ${ex.nombre}` : 'Nuevo formato',
+    formHTML(campos) + '<p class="hint">Los datos se meten entre llaves dobles, por ejemplo <code>{{operador}}</code>. ' +
+    'La lista completa está abajo, en la pestaña de Papeles.</p>', [
+      ...(ex ? [{ texto: 'Eliminar', clase: 'danger', accion: () => {
+        confirmar('Eliminar formato', `¿Eliminar "${ex.nombre}"?`, () => {
+          DB.formatos = DB.formatos.filter(x => x.id !== ex.id);
+          guardar(); cerrarModal(); render(); toast('Formato eliminado.');
+        }, 'Eliminar');
+      } }] : []),
+      { texto: 'Cancelar', clase: 'ghost', accion: cerrarModal },
+      { texto: 'Guardar', clase: 'primary', accion: () => {
+        const d = leerForm();
+        const clave = sinAcentos(d.clave).replace(/[^a-z0-9]/g, '');
+        if (!clave) return toast('El comando debe ser una palabra sin espacios.');
+        if (DB.formatos.some(x => sinAcentos(x.clave) === clave && x.id !== (ex && ex.id)))
+          return toast('Ya existe otro formato con ese comando.');
+        const datos = { clave, nombre: d.nombre || clave, creaViaje: d.creaViaje === 'si', texto: d.texto };
+        if (ex) Object.assign(ex, datos); else DB.formatos.push(Object.assign({ id: uid() }, datos));
+        guardar(); cerrarModal(); render(); toast('Formato guardado.');
+      } }
+    ]);
+}
+
+function renderPapeles() {
+  const ayuda = $('#ayudaComandos');
+  if (!ayuda) return;
+  ayuda.innerHTML = 'Escribe el comando y luego los datos del viaje, en cualquier orden: ' +
+    DB.formatos.map(f => `<code>${esc(f.clave)}</code>`).join(', ') +
+    '. Ejemplos: <code>expo T-15 AXL-4680 Premium Pool Finishes</code> · <code>vacio T-19</code>';
+
+  const cont = $('#tablaFormatos');
+  cont.innerHTML = `<div class="tbl-wrap">${tabla([
+    { t: 'Comando', v: f => `<code>${esc(f.clave)}</code>` },
+    { t: 'Formato', v: f => esc(f.nombre) },
+    { t: 'Agrega viaje', v: f => f.creaViaje ? '<span class="chip ok">Sí</span>' : '<span class="chip">No</span>' },
+    { t: 'Empieza con', v: f => esc(String(f.texto).split('\n').filter(Boolean)[1] || '').slice(0, 60) }
+  ], DB.formatos,
+    f => `<button class="btn mini" data-usar-formato="${esc(f.clave)}">Usar</button>` +
+      (sesion.rol === 'admin' ? ` <button class="btn mini" data-editar-formato="${f.id}">Editar</button>` : ''),
+    'No hay formatos.')}</div>`;
+  cont.onclick = e => {
+    const ed = e.target.closest('[data-editar-formato]');
+    if (ed) return editarFormato(ed.dataset.editarFormato);
+    const us = e.target.closest('[data-usar-formato]');
+    if (us) {
+      const campo = $('#comandoPapeles');
+      campo.value = us.dataset.usarFormato + ' ';
+      campo.focus();
+    }
+  };
+
+  $('#listaVariables').innerHTML = `<div class="tbl-wrap">${tabla([
+    { t: 'Se escribe', v: x => `<code>{{${esc(x[0])}}}</code>` },
+    { t: 'Y aparece', v: x => esc(x[1]) }
+  ], VARIABLES)}</div>`;
+}
+
+/* =========================================================
    USUARIOS — alta, permisos y contraseñas
    ========================================================= */
 function renderUsuarios() {
@@ -2157,6 +2419,7 @@ function render() {
   renderConductores();
   renderClientes();
   renderPlantillas();
+  renderPapeles();
   renderUsuarios();
 
   $('#cfgEmpresa').value = DB.empresa.nombre || '';
@@ -2165,6 +2428,7 @@ function render() {
   $('#cfgCaat').value = DB.empresa.caat || '';
   $('#cfgScac').value = DB.empresa.scac || '';
   $('#cfgFormatoFecha').value = formatoFecha();
+  $('#cfgOrigen').value = DB.preferencias.origenPorDefecto || '';
   $('#catEstadosViaje').value = DB.catalogos.estadosViaje.join(', ');
   $('#catEstadosUnidad').value = DB.catalogos.estadosUnidad.join(', ');
   $('#catTiposUnidad').value = DB.catalogos.tiposUnidad.join(', ');
@@ -2296,11 +2560,21 @@ function conectarEventos() {
       nombre: $('#cfgEmpresa').value.trim(), dispatch: $('#cfgDispatch').value.trim(),
       contacto: $('#cfgContacto').value.trim(), caat: $('#cfgCaat').value.trim(), scac: $('#cfgScac').value.trim()
     };
-    DB.preferencias = Object.assign({}, DB.preferencias, { formatoFecha: $('#cfgFormatoFecha').value });
+    DB.preferencias = Object.assign({}, DB.preferencias, {
+      formatoFecha: $('#cfgFormatoFecha').value,
+      origenPorDefecto: $('#cfgOrigen').value.trim()
+    });
     guardar(); render(); toast('Datos de la compañía guardados.');
   };
   $('#cargarAxlBtn').onclick = () => cargarInventarioAXL();
   $('#nuevoUsuarioBtn').onclick = () => editarUsuario(null);
+
+  /* Papeles */
+  $('#generarPapelesBtn').onclick = () => ejecutarComando($('#comandoPapeles').value);
+  $('#comandoPapeles').onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); ejecutarComando($('#comandoPapeles').value); }
+  };
+  $('#nuevoFormatoBtn').onclick = () => editarFormato(null);
 
   /* Llave de la API para leer fotos */
   const pintarEstadoIa = () => {
@@ -2425,6 +2699,7 @@ async function iniciar() {
   cargar();
   /* La primera vez que se abre, se carga el inventario propio de AXL */
   if (!DB.unidades.length && !DB.conductores.length && !DB.clientes.length) cargarInventarioAXL(true);
+  sembrarFormatos();
   await sembrarUsuarios();
   conectarEventos();
   $('#loginEmpresa').textContent = DB.empresa.nombre || 'Control de Schedule y Flota';

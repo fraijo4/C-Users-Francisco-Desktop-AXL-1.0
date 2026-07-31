@@ -53,6 +53,7 @@
     <button class="tab" data-view="inventario">Inventario</button>
     <button class="tab" data-view="conductores">Conductores</button>
     <button class="tab" data-view="clientes">Clientes</button>
+    <button class="tab" data-view="papeles">Papeles</button>
     <button class="tab" data-view="plantillas">Plantillas</button>
     <button class="tab" data-view="datos">Datos y Ajustes</button>
   </nav>
@@ -157,6 +158,31 @@
       <div class="panel"><div id="tablaClientes"></div></div>
     </section>
 
+    <!-- PAPELES -->
+    <section id="view-papeles" class="view hidden">
+      <div class="captura">
+        <input type="text" id="comandoPapeles"
+               placeholder="Escribe el comando y presiona Enter — ej: expo T-15 AXL-4680 Premium Pool Finishes">
+        <button class="btn primary" id="generarPapelesBtn">Generar</button>
+      </div>
+      <p class="hint" id="ayudaComandos"></p>
+
+      <div id="resultadoPapeles"></div>
+
+      <div class="panel">
+        <div class="row">
+          <h2 style="margin:0">Formatos</h2>
+          <div class="spacer"></div>
+          <button class="btn admin-only" id="nuevoFormatoBtn">+ Nuevo formato</button>
+        </div>
+        <div id="tablaFormatos"></div>
+        <details style="margin-top:12px">
+          <summary class="muted" style="cursor:pointer">Ver los datos que se pueden meter en un formato</summary>
+          <div id="listaVariables"></div>
+        </details>
+      </div>
+    </section>
+
     <!-- PLANTILLAS -->
     <section id="view-plantillas" class="view hidden">
       <div class="toolbar">
@@ -190,6 +216,7 @@
               <label style="flex:1">CAAT<input type="text" id="cfgCaat"></label>
               <label style="flex:1">SCAC<input type="text" id="cfgScac"></label>
             </div>
+            <label>Origen por defecto de los viajes<input type="text" id="cfgOrigen" placeholder="Tecate Mx"></label>
             <label>Formato de fecha
               <select id="cfgFormatoFecha">
                 <option value="mdy">Mes/Día/Año — 07/24/2026 (como el schedule de AXL)</option>

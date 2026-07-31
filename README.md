@@ -106,6 +106,30 @@ Cada cliente y cada operador tienen su color. Se reparten solos de una paleta de
 al cargar la información, y se cambian a mano en la ficha del cliente o del operador —
 el schedule se repinta al instante. El tractor toma el color de su operador asignado, así
 que en el inventario se reconoce de un vistazo de quién es cada unidad.
+- **Papeles** — genera el texto de los correos que mandas para tramitar papeles, listo
+  para copiar y pegar. Escribes un comando y el texto aparece a media pantalla:
+
+  ```
+  expo T-15 AXL-4680 Premium Pool Finishes
+  vacio T-19
+  ```
+
+  El comando (`expo`, `vacio`, o el que agregues) elige el formato; lo demás se reconoce
+  solo: número económico del tractor, de la caja, operador y cliente, en cualquier orden.
+  Los datos salen de tu propio inventario y directorio, así que las placas, el VIN, el CAAT,
+  el SCAC y la dirección siempre coinciden con lo que tienes capturado.
+
+  - **Cada comando agrega también el viaje al schedule**, con su tractor, remolque, operador
+    y cliente. La única excepción son los formatos marcados como que no agregan viaje —
+    el de *entrada vacío* viene así. Si te equivocaste, el botón **Deshacer** lo quita.
+  - Si algún dato falta (por ejemplo la dirección de un cliente), ese renglón **no sale
+    vacío**: se cae solo y la página te dice qué información completar.
+  - Los formatos se editan y se crean desde la misma pestaña. El texto se escribe tal cual
+    quieres que salga, y los datos van entre llaves dobles: `{{operador}}`, `{{tractor.placa}}`,
+    `{{cliente.direccion}}`… La lista completa está al final de la pestaña.
+  - Quien es de consulta puede generar el texto, pero no se le agrega el viaje ni puede
+    cambiar los formatos.
+
 - **Plantillas** — rutas que se repiten (por ejemplo: lunes, miércoles y viernes,
   Hermosillo → Nogales). Con el botón **Generar** llenas el schedule de una semana
   o un mes completo de un jalón. Si un viaje ya fue generado antes, no se duplica.
