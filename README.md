@@ -85,7 +85,8 @@ le olvida la suya, quien tiene permiso de editar le pone una nueva.
   2. **Pegar lista:** pegas varios renglones de Excel, WhatsApp o un correo — un viaje por
      renglón — y los interpreta todos de una vez.
   3. **Leer foto con IA:** subes una foto del schedule, una captura de Excel o de WhatsApp
-     y Claude lee los viajes y los acomoda. Requiere configurar una llave de API (abajo).
+     y la IA lee los viajes y los acomoda. Requiere configurar una llave de API de Claude
+     o de ChatGPT (abajo).
   4. **Formulario completo**, con todos los campos.
 
   En los cuatro casos aparece una **vista previa**: los renglones a los que les falta algo
@@ -165,11 +166,23 @@ los conductores, comparando por nombre.
 
 ## Leer fotos con IA
 
-En *Datos y Ajustes → Leer fotos y capturas con IA* se pega una llave de la API de Claude
-(se obtiene en platform.claude.com → API keys). La llave se guarda **solo en ese navegador**
-y **no se incluye en los respaldos**. Con el botón *Probar conexión* se verifica antes de usarla.
+En *Datos y Ajustes → Leer fotos y capturas con IA* se pega una llave de API. Sirve
+cualquiera de las dos:
 
-Cómo funciona: la página encoge la imagen si viene muy grande, se la manda a Claude junto con
+| Llave | Dónde se saca | Empieza con |
+|---|---|---|
+| Claude (Anthropic) | platform.claude.com → API keys | `sk-ant-` |
+| ChatGPT (OpenAI) | platform.openai.com → API keys | `sk-` |
+
+La página reconoce sola cuál pegaste y le habla al que corresponde; el estado te dice
+cuál quedó configurada. La llave se guarda **solo en ese navegador** y **no se incluye
+en los respaldos**. Con el botón *Probar conexión* se verifica antes de usarla.
+
+Cuidado con la llave: es como la contraseña de la tarjeta de esa cuenta. No se manda por
+chat, correo ni WhatsApp. Si se te llega a salir, entra a la página donde la generaste,
+cancélala (*Revoke*) y crea otra; toma un minuto y evita que alguien más gaste tu saldo.
+
+Cómo funciona: la página encoge la imagen si viene muy grande, se la manda al modelo junto con
 las listas de tractores, remolques, operadores y clientes que ya tienes capturados, y pide de
 vuelta los viajes en un formato fijo. Lo que reconoce del inventario lo liga solo; lo que no
 reconoce **no se inventa** — se anota en las notas del viaje (por ejemplo *"Unidad según la
@@ -177,7 +190,7 @@ foto: T-99"*) y el renglón se marca en la vista previa para que lo revises.
 
 Dos cosas a tener en cuenta:
 
-- Cada lectura se cobra a tu cuenta de Claude.
+- Cada lectura se cobra a la cuenta de la llave que hayas puesto.
 - Si abres la página desde la liga de claude.ai, el navegador bloquea esa conexión por
   seguridad. La lectura de fotos funciona en la versión que abres desde tu computadora o
   desde GitHub Pages. Todo lo demás funciona igual en las dos.

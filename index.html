@@ -229,9 +229,9 @@
         </div>
         <div class="panel admin-only">
           <h2>Leer fotos y capturas con IA</h2>
-          <p class="muted">Para que la página lea un schedule desde una foto o screenshot necesita una llave de la API de Claude (platform.claude.com → API keys). La llave se guarda <b>solo en este navegador</b> y no se incluye en los respaldos.</p>
+          <p class="muted">Para que la página lea un schedule desde una foto o screenshot necesita una llave de API. Sirve la de <b>Claude</b> (platform.claude.com → API keys, empieza con <code>sk-ant-</code>) o la de <b>ChatGPT</b> (platform.openai.com → API keys, empieza con <code>sk-</code>); la página reconoce sola cuál pegaste. La llave se guarda <b>solo en este navegador</b> y no se incluye en los respaldos.</p>
           <form id="iaForm" class="form">
-            <label>Llave de API<input type="password" id="cfgApiKey" placeholder="sk-ant-..." autocomplete="off"></label>
+            <label>Llave de API<input type="password" id="cfgApiKey" placeholder="sk-ant-... o sk-proj-..." autocomplete="off"></label>
             <div class="row">
               <button class="btn primary" type="submit">Guardar llave</button>
               <button class="btn" type="button" id="probarIaBtn">Probar conexión</button>
@@ -239,7 +239,7 @@
             </div>
           </form>
           <p class="hint" id="estadoIa"></p>
-          <p class="hint">Aviso: la lectura de fotos se cobra a tu cuenta de Claude por cada imagen. Si abres la página desde la liga de claude.ai, el navegador bloquea esta conexión por seguridad; usa la versión que abres desde tu computadora o GitHub Pages.</p>
+          <p class="hint">Aviso: la lectura de fotos se cobra a la cuenta de la llave que pegues, por cada imagen. Nunca compartas la llave por chat, correo ni WhatsApp: si se te sale, cancélala desde la página donde la generaste y crea otra. Si abres la página desde la liga de claude.ai, el navegador bloquea esta conexión por seguridad; usa la versión que abres desde tu computadora o GitHub Pages.</p>
         </div>
         <div class="panel admin-only">
           <h2>Inventario de AXL</h2>

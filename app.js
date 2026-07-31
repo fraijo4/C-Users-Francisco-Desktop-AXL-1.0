@@ -1571,7 +1571,17 @@ martes 5:30 T-15 Hermosillo a Nogales, Ford
    LECTURA DE FOTOS Y CAPTURAS DE PANTALLA CON IA
    ========================================================= */
 const CLAVE_API = 'axl_api_key';
-const MODELO_IA = 'claude-opus-5';
+
+/* La página acepta llave de Claude (Anthropic) o de ChatGPT (OpenAI).
+   Se reconoce por cómo empieza la llave; el resto del programa es igual. */
+const PROVEEDORES = {
+  anthropic: { nombre: 'Claude', modelo: 'claude-opus-5' },
+  openai: { nombre: 'ChatGPT', modelo: 'gpt-4o' }
+};
+function proveedorDeLlave(llave) {
+  return /^sk-ant-/i.test(String(llave || '').trim()) ? 'anthropic' : 'openai';
+}
+function llaveGuardada() { return (localStorage.getItem(CLAVE_API) || '').trim(); }
 
 const ESQUEMA_VIAJES = {
   type: 'object',
@@ -1647,52 +1657,89 @@ function prepararImagen(dataUrl, maxLado = 2200) {
   });
 }
 
-/* Llamada a la API de Claude. Se hace con fetch porque la página no usa
-   empaquetador y el SDK oficial no se puede cargar en un archivo suelto. */
-async function pedirLecturaIA(dataUrl) {
-  const llave = localStorage.getItem(CLAVE_API);
-  if (!llave) throw new Error('Falta la llave de API. Configúrala en "Datos y Ajustes".');
-  const img = await prepararImagen(dataUrl);
-  let r;
-  try {
-    r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
+/* Arma la petición según de quién sea la llave. Se hace con fetch porque la
+   página no usa empaquetador y los SDK oficiales no se pueden cargar sueltos. */
+function peticionIA(quien, llave, img, instrucciones) {
+  if (quien === 'anthropic') {
+    return {
+      url: 'https://api.anthropic.com/v1/messages',
       headers: {
         'content-type': 'application/json',
         'x-api-key': llave,
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
-      body: JSON.stringify({
-        model: MODELO_IA,
+      cuerpo: {
+        model: PROVEEDORES.anthropic.modelo,
         max_tokens: 16000,
         output_config: { effort: 'medium', format: { type: 'json_schema', schema: ESQUEMA_VIAJES } },
         messages: [{
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: img.tipo, data: img.datos } },
-            { type: 'text', text: promptIA() }
+            { type: 'text', text: instrucciones }
           ]
         }]
-      })
-    });
+      }
+    };
+  }
+  return {
+    url: 'https://api.openai.com/v1/chat/completions',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${llave}` },
+    cuerpo: {
+      model: PROVEEDORES.openai.modelo,
+      max_tokens: 16000,
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'viajes', strict: true, schema: ESQUEMA_VIAJES }
+      },
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:${img.tipo};base64,${img.datos}` } },
+          { type: 'text', text: instrucciones }
+        ]
+      }]
+    }
+  };
+}
+
+/* Saca el texto de la respuesta, que cada uno acomoda a su manera */
+function textoDeRespuesta(quien, datos) {
+  if (quien === 'anthropic') {
+    if (datos.stop_reason === 'refusal') return '';
+    return (datos.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  }
+  const msg = (datos.choices || [])[0]?.message || {};
+  return msg.refusal ? '' : (msg.content || '');
+}
+
+async function pedirLecturaIA(dataUrl) {
+  const llave = llaveGuardada();
+  if (!llave) throw new Error('Falta la llave de API. Configúrala en "Datos y Ajustes".');
+  const quien = proveedorDeLlave(llave);
+  const marca = PROVEEDORES[quien].nombre;
+  const img = await prepararImagen(dataUrl);
+  const pet = peticionIA(quien, llave, img, promptIA());
+  let r;
+  try {
+    r = await fetch(pet.url, { method: 'POST', headers: pet.headers, body: JSON.stringify(pet.cuerpo) });
   } catch (e) {
-    throw new Error('No se pudo conectar con Claude. Si abriste la página desde la liga de claude.ai, ' +
+    throw new Error(`No se pudo conectar con ${marca}. Si abriste la página desde la liga de claude.ai, ` +
       'el navegador bloquea esta conexión: usa la versión de tu computadora o de GitHub Pages.');
   }
   if (!r.ok) {
     let detalle = '';
     try { detalle = (await r.json()).error?.message || ''; } catch { /* respuesta sin JSON */ }
-    if (r.status === 401) throw new Error('La llave de API no es válida.');
-    if (r.status === 429) throw new Error('Se alcanzó el límite de la cuenta de Claude. Espera un momento y reintenta.');
-    throw new Error(`Claude respondió con error ${r.status}. ${detalle}`);
+    if (r.status === 401) throw new Error(`La llave de ${marca} no es válida.`);
+    if (r.status === 429) throw new Error(`La cuenta de ${marca} no tiene saldo o llegó a su límite. ` +
+      'Revisa el saldo y reintenta.');
+    throw new Error(`${marca} respondió con error ${r.status}. ${detalle}`);
   }
-  const datos = await r.json();
-  if (datos.stop_reason === 'refusal') throw new Error('Claude no pudo procesar esta imagen.');
-  const texto = (datos.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-  if (!texto) throw new Error('Claude no devolvió información de la imagen.');
+  const texto = textoDeRespuesta(quien, await r.json());
+  if (!texto) throw new Error(`${marca} no devolvió información de la imagen.`);
   try { return JSON.parse(texto); }
-  catch { throw new Error('La respuesta de Claude no se pudo leer. Vuelve a intentar.'); }
+  catch { throw new Error(`La respuesta de ${marca} no se pudo leer. Vuelve a intentar.`); }
 }
 
 /* Convierte lo que devolvió la IA en viajes de la aplicación */
@@ -2728,12 +2775,13 @@ function conectarEventos() {
 
   /* Llave de la API para leer fotos */
   const pintarEstadoIa = () => {
-    const llave = localStorage.getItem(CLAVE_API);
+    const llave = llaveGuardada();
     $('#estadoIa').textContent = llave
-      ? `Llave guardada (termina en …${llave.slice(-4)}). Ya puedes usar "Leer foto con IA" en el schedule.`
+      ? `Llave de ${PROVEEDORES[proveedorDeLlave(llave)].nombre} guardada (termina en …${llave.slice(-4)}). ` +
+        'Ya puedes usar "Leer foto con IA" en el schedule.'
       : 'Sin llave configurada: la lectura de fotos está apagada.';
     $('#cfgApiKey').value = '';
-    $('#cfgApiKey').placeholder = llave ? '•••••••• (guardada)' : 'sk-ant-...';
+    $('#cfgApiKey').placeholder = llave ? '•••••••• (guardada)' : 'sk-ant-... o sk-proj-...';
   };
   pintarEstadoIa();
   $('#iaForm').onsubmit = e => {
@@ -2750,24 +2798,37 @@ function conectarEventos() {
     toast('Llave borrada.');
   };
   $('#probarIaBtn').onclick = async () => {
-    const llave = $('#cfgApiKey').value.trim() || localStorage.getItem(CLAVE_API);
+    const llave = $('#cfgApiKey').value.trim() || llaveGuardada();
     if (!llave) return toast('Primero guarda una llave.');
-    $('#estadoIa').textContent = 'Probando la conexión…';
+    const quien = proveedorDeLlave(llave);
+    const marca = PROVEEDORES[quien].nombre;
+    $('#estadoIa').textContent = `Probando la conexión con ${marca}…`;
+    const saludo = [{ role: 'user', content: 'Responde solamente: listo' }];
+    const pet = quien === 'anthropic'
+      ? {
+          url: 'https://api.anthropic.com/v1/messages',
+          headers: {
+            'content-type': 'application/json', 'x-api-key': llave,
+            'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'
+          },
+          cuerpo: { model: PROVEEDORES.anthropic.modelo, max_tokens: 16, messages: saludo }
+        }
+      : {
+          url: 'https://api.openai.com/v1/chat/completions',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${llave}` },
+          cuerpo: { model: PROVEEDORES.openai.modelo, max_tokens: 16, messages: saludo }
+        };
     try {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json', 'x-api-key': llave,
-          'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: MODELO_IA, max_tokens: 16,
-          messages: [{ role: 'user', content: 'Responde solamente: listo' }]
-        })
-      });
-      $('#estadoIa').textContent = r.ok
-        ? '✓ Conexión correcta: la lectura de fotos está lista.'
-        : (r.status === 401 ? '✗ La llave no es válida.' : `✗ Claude respondió con error ${r.status}.`);
+      const r = await fetch(pet.url, { method: 'POST', headers: pet.headers, body: JSON.stringify(pet.cuerpo) });
+      if (r.ok) {
+        $('#estadoIa').textContent = `✓ Conexión correcta con ${marca}: la lectura de fotos está lista.`;
+      } else if (r.status === 401) {
+        $('#estadoIa').textContent = `✗ La llave de ${marca} no es válida (o ya fue cancelada).`;
+      } else if (r.status === 429) {
+        $('#estadoIa').textContent = `✗ La cuenta de ${marca} no tiene saldo o llegó a su límite.`;
+      } else {
+        $('#estadoIa').textContent = `✗ ${marca} respondió con error ${r.status}.`;
+      }
     } catch {
       $('#estadoIa').textContent = '✗ El navegador bloqueó la conexión. Abre la página desde tu computadora o desde GitHub Pages.';
     }
