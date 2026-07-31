@@ -46,7 +46,8 @@ le olvida la suya, quien tiene permiso de editar le pone una nueva.
 - **Panel** — viajes de hoy y mañana, unidades libres, ingreso de la semana y avisos
   automáticos: seguros, verificaciones y licencias por vencer (o vencidas) y viajes sin
   unidad o sin operador asignado. Incluye el contador de **pendientes de días pasados**.
-- **Schedule** — cuatro vistas: **Hoja diaria** (la que sale al entrar), **Semana**, **Mes** y **Lista**.
+- **Schedule** — cinco vistas: **Hoja diaria** (la que sale al entrar), **Semana**, **Mes**,
+  **Todos los viajes** y **Lista simple**.
 
   La **hoja diaria** es el mismo formato de siempre: un bloque por día con el encabezado
   *Lunes 07/27/2026* y la tabla con Cliente, Operador, Origen, Destino, Stop, Tractor,
@@ -62,6 +63,12 @@ le olvida la suya, quien tiene permiso de editar le pone una nueva.
   - Quien puede editar lo hace **sobre la tabla**: clic en cualquier celda de texto y
     escribes (Enter guarda, Escape cancela); operador, tractor y remolque son listas.
   - Quien es de consulta ve la hoja igual, pero sin poder tocarla.
+
+  **Todos los viajes** es exactamente la misma hoja, pero con el archivo completo: todos los
+  días que tengan viajes, del más reciente al más viejo, con las mismas columnas, las mismas
+  casillas y la misma edición sobre la tabla. Los filtros y el buscador de arriba también
+  funcionan ahí, así que sirve para revisar el historial de un cliente, de una unidad o de
+  un operador sin salirte del formato de siempre.
 
   No hay columna de hora: dentro de cada día los viajes van en el orden en que se capturaron,
   y una misma unidad puede dar dos vueltas el mismo día sin que la página lo tome por error.
@@ -122,8 +129,13 @@ que en el inventario se reconoce de un vistazo de quién es cada unidad.
   - **Cada comando agrega también el viaje al schedule**, con su tractor, remolque, operador
     y cliente. La única excepción son los formatos marcados como que no agregan viaje —
     el de *entrada vacío* viene así. Si te equivocaste, el botón **Deshacer** lo quita.
-  - Si algún dato falta (por ejemplo la dirección de un cliente), ese renglón **no sale
-    vacío**: se cae solo y la página te dice qué información completar.
+  - **Si falta algún dato, la página te lo pide ahí mismo** antes de dejarte copiar: sale un
+    recuadro con los campos que faltan (remolque, dirección del cliente, código postal…) y en
+    cuanto los llenas, el texto se rehace solo y cada dato entra en su renglón. Además **se
+    guarda donde le toca**: la dirección se queda en la ficha del cliente, el remolque en el
+    viaje, el CAAT en los datos de la compañía. La siguiente vez ya no te lo vuelve a pedir.
+  - Mientras falten datos, el botón de copiar está bloqueado y el viaje no se agrega, para que
+    nunca salga un correo con un renglón en blanco.
   - Los formatos se editan y se crean desde la misma pestaña. El texto se escribe tal cual
     quieres que salga, y los datos van entre llaves dobles: `{{operador}}`, `{{tractor.placa}}`,
     `{{cliente.direccion}}`… La lista completa está al final de la pestaña.

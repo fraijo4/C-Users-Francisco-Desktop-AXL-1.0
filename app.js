@@ -660,8 +660,8 @@ function tablaHoja(viajes) {
     </table></div>`;
 }
 
-function bloqueDia(fecha, viajes) {
-  const editable = sesion.rol === 'admin';
+function bloqueDia(fecha, viajes, soloLectura = false) {
+  const editable = sesion.rol === 'admin' && !soloLectura;
   const activos = viajes.filter(v => !estaCompletado(v));
   const listos = viajes.filter(estaCompletado);
   const cabeza = `<div class="dia-titulo">
@@ -670,6 +670,7 @@ function bloqueDia(fecha, viajes) {
       ${editable ? `<button class="btn mini" data-nuevo="${fecha}">+ Agregar viaje</button>` : ''}
     </div>`;
   if (!viajes.length) {                       // los días sin viajes no estorban
+    if (soloLectura) return '';
     return editable
       ? `<div class="dia-vacio"><b>${esc(fechaEncabezado(fecha))}</b><span>sin viajes</span>
          <button class="btn mini" data-nuevo="${fecha}">+ Agregar viaje</button></div>`
@@ -757,6 +758,18 @@ function bloquePendientes(datos, desde) {
     </table></div></div>`;
 }
 
+/* Todos los viajes, en el mismo formato de la hoja.
+   Los días van del más reciente al más viejo para no scrollear el archivo entero. */
+function renderTodos(datos, cont) {
+  const dias = [...new Set(datos.map(v => v.fecha))].filter(Boolean).sort().reverse();
+  const total = datos.length;
+  $('#periodoLabel').textContent = total
+    ? `Todos los viajes — ${total} en ${dias.length} día(s)`
+    : 'Todos los viajes';
+  const html = dias.map(f => bloqueDia(f, ordenarViajes(datos.filter(v => v.fecha === f)), true)).join('');
+  cont.innerHTML = html || '<div class="panel"><div class="empty">Todavía no hay viajes capturados.</div></div>';
+}
+
 function renderHoja(datos, cont) {
   const ini = inicioSemana(estadoUI.ancla), fin = addDias(ini, 6);
   $('#periodoLabel').textContent = `Semana del ${fechaCorta(ini)} al ${fechaCorta(fin)}`;
@@ -777,6 +790,9 @@ function renderSchedule() {
 
   if (estadoUI.vista === 'hoja') {
     renderHoja(datos, cont);
+
+  } else if (estadoUI.vista === 'todos') {
+    renderTodos(datos, cont);
 
   } else if (estadoUI.vista === 'semana') {
     const ini = inicioSemana(estadoUI.ancla);
@@ -1953,67 +1969,181 @@ function armarTexto(plantilla, datos) {
 }
 
 let ultimoViajeGenerado = null;
+let comandoActual = null;          // { formato, viaje } de lo último que se generó
+
+/* Busca un cliente aunque no se haya escrito el nombre completo */
+function buscarClienteAprox(texto) {
+  const t = sinAcentos(texto).trim();
+  if (!t) return null;
+  return DB.clientes.find(c => sinAcentos(c.nombre) === t) ||
+    DB.clientes.find(c => sinAcentos(c.nombre).startsWith(t)) ||
+    DB.clientes.find(c => sinAcentos(c.nombre).includes(t)) ||
+    DB.clientes.find(c => t.split(' ').filter(p => p.length > 2)
+      .every(p => sinAcentos(c.nombre).includes(p))) || null;
+}
+
+/* Qué le falta al formato para quedar completo, y dónde se guarda cada dato */
+function faltantesDelFormato(formato, v) {
+  const usadas = [...String(formato.texto).matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map(m => m[1]);
+  const cli = DB.clientes.find(x => sinAcentos(x.nombre) === sinAcentos(v.cliente));
+  const pide = [];
+  const yaPedido = new Set();
+  const agregar = f => { if (!yaPedido.has(f.k)) { yaPedido.add(f.k); pide.push(f); } };
+
+  usadas.forEach(clave => {
+    const raiz = clave.split('.')[0];
+    if (raiz === 'tractor' && !v.unidadId)
+      agregar({ k: 'unidadId', t: 'Tractor', tipo: 'select', opciones: opcionesUnidad('Tractor'), guardaEn: 'viaje' });
+    if (raiz === 'remolque' && !v.remolqueId)
+      agregar({ k: 'remolqueId', t: 'Remolque / caja', tipo: 'select', opciones: opcionesUnidad('Remolque'), guardaEn: 'viaje' });
+    if (raiz === 'operador' && !v.conductorId)
+      agregar({ k: 'conductorId', t: 'Operador', tipo: 'select', opciones: opcionesConductor(), guardaEn: 'viaje' });
+    if (raiz === 'cliente' && !cli)
+      agregar({ k: 'cliente', t: 'Cliente', tipo: 'select', opciones: DB.clientes.map(c => ({ v: c.nombre, t: c.nombre })), guardaEn: 'viaje' });
+    if (raiz === 'destino' && !v.destino) agregar({ k: 'destino', t: 'Destino', guardaEn: 'viaje' });
+    if (raiz === 'origen' && !v.origen) agregar({ k: 'origen', t: 'Origen', guardaEn: 'viaje' });
+    if (raiz === 'facturas' && !v.facturas) agregar({ k: 'facturas', t: 'Facturas', guardaEn: 'viaje' });
+    /* Datos que le faltan a la ficha del cliente: se piden aquí y se guardan allá */
+    if (cli && clave.startsWith('cliente.')) {
+      const campo = clave.split('.')[1];
+      const etiquetas = { direccion: 'Dirección del cliente', ciudad: 'Ciudad', estado: 'Estado', cp: 'Código postal' };
+      if (etiquetas[campo] && !cli[campo])
+        agregar({ k: campo, t: etiquetas[campo], guardaEn: 'cliente', clienteId: cli.id });
+    }
+    /* Datos de la compañía */
+    if (['caat', 'scac', 'empresa'].includes(clave) && !DB.empresa[clave === 'empresa' ? 'nombre' : clave])
+      agregar({ k: clave, t: clave === 'empresa' ? 'Nombre de la compañía' : clave.toUpperCase(), guardaEn: 'empresa' });
+  });
+  return pide;
+}
 
 function ejecutarComando(textoComando) {
-  const cont = $('#resultadoPapeles');
   const bruto = String(textoComando || '').trim();
   if (!bruto) return;
   const partes = bruto.split(/\s+/);
   const clave = sinAcentos(partes[0]);
   const formato = DB.formatos.find(f => sinAcentos(f.clave) === clave);
   if (!formato) {
-    cont.innerHTML = `<div class="panel"><p class="error">No conozco el comando "${esc(partes[0])}".</p>
+    $('#resultadoPapeles').innerHTML = `<div class="panel"><p class="error">No conozco el comando "${esc(partes[0])}".</p>
       <p class="muted">Comandos disponibles: ${DB.formatos.map(f => `<code>${esc(f.clave)}</code>`).join(', ')}.</p></div>`;
     return;
   }
   const resto = partes.slice(1).join(' ');
   const v = interpretarLinea(resto);
   if (!v.origen && DB.preferencias.origenPorDefecto) v.origen = DB.preferencias.origenPorDefecto;
-  /* si el destino quedó siendo el nombre del cliente, se cambia por su ciudad */
-  const cliDir = DB.clientes.find(x => sinAcentos(x.nombre) === sinAcentos(v.destino));
-  if (cliDir && lugarDeCliente(cliDir)) v.destino = lugarDeCliente(cliDir);
-  const datos = datosDelComando(v);
-  const { texto, faltantes } = armarTexto(formato.texto, datos);
+  /* si no se reconoció el cliente completo, se intenta por aproximación */
+  if (!v.cliente && v.destino) {
+    const aprox = buscarClienteAprox(v.destino);
+    if (aprox) v.cliente = aprox.nombre;
+  }
+  const cli = DB.clientes.find(x => sinAcentos(x.nombre) === sinAcentos(v.cliente));
+  if (cli && (!v.destino || sinAcentos(v.destino) === sinAcentos(cli.nombre)) && lugarDeCliente(cli))
+    v.destino = lugarDeCliente(cli);
 
-  /* El viaje se agrega solo, salvo en los formatos que no lo llevan (vacío) */
+  comandoActual = { formato, viaje: v, viajeId: null };
+  pintarResultado();
+}
+
+/* Dibuja el texto y, si falta algo, los campos para completarlo en el momento */
+function pintarResultado() {
+  if (!comandoActual) return;
+  const { formato, viaje } = comandoActual;
+  const datos = datosDelComando(viaje);
+  const { texto } = armarTexto(formato.texto, datos);
+  const faltan = faltantesDelFormato(formato, viaje);
+  const completo = faltan.length === 0;
+
+  const controles = faltan.map(f => {
+    const id = 'falta_' + f.k;
+    if (f.tipo === 'select') {
+      const ops = (f.opciones || []).map(o =>
+        `<option value="${esc(o.v)}">${esc(String(o.t).split(' · ')[0])}</option>`).join('');
+      return `<label>${esc(f.t)}<select id="${id}" data-campo="${f.k}" data-guarda="${f.guardaEn}" data-cliente="${f.clienteId || ''}">
+        <option value="">— elige —</option>${ops}</select></label>`;
+    }
+    return `<label>${esc(f.t)}<input id="${id}" type="text" data-campo="${f.k}" data-guarda="${f.guardaEn}"
+      data-cliente="${f.clienteId || ''}" placeholder="escríbelo aquí"></label>`;
+  }).join('');
+
+  /* El viaje se agrega solo cuando el formato lo lleva y ya no falta nada */
   let nota = '';
-  ultimoViajeGenerado = null;
-  if (formato.creaViaje && sesion.rol === 'admin') {
-    const viaje = Object.assign({ id: uid(), creado: new Date().toISOString(), estatus: {} },
-      (({ _texto, ...r }) => r)(v), { notas: `Generado con el comando "${formato.clave}"` });
-    DB.viajes.push(viaje);
-    guardar(); renderSchedule(); renderPanel(); renderLeyenda(viajesFiltrados());
-    ultimoViajeGenerado = viaje.id;
-    nota = `<p class="chip ok">✓ El viaje quedó agregado al schedule del ${esc(fechaCorta(viaje.fecha))}</p>
-      <button class="btn mini" id="deshacerViajeBtn">Deshacer</button>`;
-  } else if (formato.creaViaje) {
-    nota = '<p class="hint">Tu cuenta es de consulta: el texto se genera, pero el viaje no se agrega al schedule.</p>';
-  } else {
+  if (!formato.creaViaje) {
     nota = '<p class="hint">Este formato no agrega viaje al schedule.</p>';
+  } else if (sesion.rol !== 'admin') {
+    nota = '<p class="hint">Tu cuenta es de consulta: el texto se genera, pero el viaje no se agrega al schedule.</p>';
+  } else if (!completo) {
+    nota = '<p class="hint">En cuanto completes los datos de arriba se agrega el viaje al schedule.</p>';
+  } else {
+    if (!comandoActual.viajeId) {
+      const nuevo = Object.assign({ id: uid(), creado: new Date().toISOString(), estatus: {} },
+        (({ _texto, ...r }) => r)(viaje), { notas: `Generado con el comando "${formato.clave}"` });
+      DB.viajes.push(nuevo);
+      comandoActual.viajeId = nuevo.id;
+      ultimoViajeGenerado = nuevo.id;
+      guardar(); renderSchedule(); renderPanel(); actualizarPie();
+    } else {                                   // ya existía: se actualiza con lo que se completó
+      const ex = DB.viajes.find(x => x.id === comandoActual.viajeId);
+      if (ex) { Object.assign(ex, (({ _texto, ...r }) => r)(viaje)); guardar(); renderSchedule(); }
+    }
+    const f = DB.viajes.find(x => x.id === comandoActual.viajeId);
+    nota = `<p class="chip ok">✓ El viaje quedó agregado al schedule del ${esc(fechaCorta(f ? f.fecha : viaje.fecha))}</p>
+      <button class="btn mini" id="deshacerViajeBtn">Deshacer</button>`;
   }
 
-  cont.innerHTML = `<div class="panel resultado">
+  $('#resultadoPapeles').innerHTML = `<div class="panel resultado">
       <div class="row">
         <h2 style="margin:0">${esc(formato.nombre)}</h2>
         <div class="spacer"></div>
-        <button class="btn primary" id="copiarBtn">Copiar texto</button>
+        <button class="btn primary" id="copiarBtn" ${completo ? '' : 'disabled title="Faltan datos"'}>Copiar texto</button>
       </div>
+      ${faltan.length ? `<div class="faltantes">
+        <b>Faltan datos para que el formato salga completo:</b>
+        <div class="form-grid">${controles}</div>
+        <p class="hint">Lo que escribas se guarda donde corresponde: ${
+          [...new Set(faltan.map(f => f.guardaEn))].map(g =>
+            ({ viaje: 'en el viaje', cliente: 'en la ficha del cliente', empresa: 'en los datos de la compañía' })[g]).join(' y ')}.</p>
+      </div>` : ''}
       <pre id="textoGenerado" class="salida">${esc(texto)}</pre>
       <div class="row">${nota}</div>
-      ${faltantes.length ? `<p class="hint">Faltó información para: ${faltantes.map(f => `<code>${esc(f)}</code>`).join(', ')}.
-        Complétala en la ficha del cliente, de la unidad o del operador y vuelve a generar.</p>` : ''}
     </div>`;
 
-  $('#copiarBtn').onclick = () => copiarTexto(texto);
+  const copiar = $('#copiarBtn');
+  if (copiar && completo) copiar.onclick = () => copiarTexto(texto);
   const deshacer = $('#deshacerViajeBtn');
   if (deshacer) deshacer.onclick = () => {
-    if (!ultimoViajeGenerado) return;
-    DB.viajes = DB.viajes.filter(x => x.id !== ultimoViajeGenerado);
-    ultimoViajeGenerado = null;
-    guardar(); render();
-    irA('papeles');
+    if (!comandoActual.viajeId) return;
+    DB.viajes = DB.viajes.filter(x => x.id !== comandoActual.viajeId);
+    comandoActual.viajeId = null; ultimoViajeGenerado = null;
+    guardar(); renderSchedule(); renderPanel(); actualizarPie(); pintarResultado();
     toast('El viaje se quitó del schedule.');
   };
+
+  /* Al completar un dato se guarda en su lugar y el texto se rehace al momento */
+  $$('#resultadoPapeles .faltantes [data-campo]').forEach(el => {
+    el.onchange = () => {
+      const valor = el.value.trim();
+      if (!valor) return;
+      const campo = el.dataset.campo;
+      if (el.dataset.guarda === 'cliente') {
+        const c = DB.clientes.find(x => x.id === el.dataset.cliente);
+        if (c) { c[campo] = valor; guardar(); renderClientes(); }
+      } else if (el.dataset.guarda === 'empresa') {
+        DB.empresa[campo === 'empresa' ? 'nombre' : campo] = valor;
+        guardar(); render();
+      } else {
+        comandoActual.viaje[campo] = valor;
+        if (campo === 'cliente') {
+          const c = DB.clientes.find(x => sinAcentos(x.nombre) === sinAcentos(valor));
+          if (c && lugarDeCliente(c)) comandoActual.viaje.destino = lugarDeCliente(c);
+        }
+        if (campo === 'unidadId' && !comandoActual.viaje.conductorId) {
+          const op = DB.conductores.find(x => x.unidadId === valor);
+          if (op) comandoActual.viaje.conductorId = op.id;
+        }
+      }
+      pintarResultado();
+    };
+  });
 }
 
 async function copiarTexto(texto) {
@@ -2451,6 +2581,10 @@ function render() {
   $('#catEstadosConductor').value = DB.catalogos.estadosConductor.join(', ');
   $('#ultimoGuardado').textContent = DB.actualizado
     ? 'Última vez guardado: ' + new Date(DB.actualizado).toLocaleString('es-MX') : 'Todavía no hay información guardada.';
+  actualizarPie();
+}
+
+function actualizarPie() {
   $('#footerInfo').textContent =
     `${DB.viajes.length} viajes · ${DB.unidades.length} unidades · ${DB.conductores.length} operadores · ` +
     `${DB.clientes.length} clientes · la información se guarda en este navegador`;

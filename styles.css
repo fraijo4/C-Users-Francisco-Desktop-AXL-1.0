@@ -223,6 +223,12 @@ body.role-guest .tick:hover{border-color:var(--line)}
   user-select:text;max-height:52vh;overflow:auto
 }
 .resultado .row{gap:10px;align-items:center}
+.faltantes{border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));
+  background:color-mix(in srgb,var(--warn) 8%,transparent);
+  border-radius:var(--radius);padding:12px 14px;margin-top:12px}
+.faltantes > b{color:var(--warn);font-size:13.5px;display:block;margin-bottom:8px}
+.faltantes .form-grid{gap:0 12px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
 #listaVariables code,.hint code,.muted code{background:var(--chip);border-radius:5px;padding:1px 6px;font-size:12.5px}
 
 /* ===== Semana ===== */
