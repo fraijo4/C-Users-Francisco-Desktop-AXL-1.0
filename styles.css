@@ -10,6 +10,14 @@ html[data-theme="dark"]{
   --brand:#4d8ef7; --brand-ink:#08111f; --ok:#3ecf8e; --warn:#f0b429; --bad:#f2706b;
   --chip:#1e2734; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
 }
+/* Si nadie eligió tema, se respeta el del sistema operativo */
+@media (prefers-color-scheme: dark){
+  html:not([data-theme]){
+    --bg:#0f141c; --panel:#161d28; --ink:#e7edf6; --muted:#93a0b4; --line:#26303f;
+    --brand:#4d8ef7; --brand-ink:#08111f; --ok:#3ecf8e; --warn:#f0b429; --bad:#f2706b;
+    --chip:#1e2734; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  }
+}
 *{box-sizing:border-box}
 body{
   margin:0; background:var(--bg); color:var(--ink);

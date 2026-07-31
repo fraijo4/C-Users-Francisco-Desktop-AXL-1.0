@@ -117,17 +117,21 @@ const CLAVE = 'axl_transportes_v1';
 const CATALOGOS_DEF = {
   estadosViaje: ['Programado', 'Confirmado', 'En ruta', 'Entregado', 'Retrasado', 'Cancelado'],
   estadosUnidad: ['Disponible', 'En ruta', 'Mantenimiento', 'Fuera de servicio'],
-  tiposUnidad: ['Tractocamión', 'Caja seca', 'Caja refrigerada', 'Plataforma', 'Camioneta', 'Tolva', 'Dolly'],
+  tiposUnidad: ['Tractocamión', "Caja seca 53'", "Caja refrigerada 53'", "Plataforma 48'",
+    "Plataforma 45'", 'Camioneta', 'Dolly'],
   estadosConductor: ['Disponible', 'En ruta', 'Descanso', 'Vacaciones', 'Baja']
 };
+const CATEGORIAS = ['Tractor', 'Remolque', 'Otro'];
+const EMPRESA_DEF = { nombre: 'AXL Transport', dispatch: '', contacto: '', caat: '', scac: '' };
 
 const ESTADO_INICIAL = () => ({
-  version: 1,
-  empresa: { nombre: 'Mi Compañía de Transportes', dispatch: '', contacto: '' },
+  version: 2,
+  empresa: Object.assign({}, EMPRESA_DEF),
   auth: { hash: '', salt: '', configurada: false },
   catalogos: JSON.parse(JSON.stringify(CATALOGOS_DEF)),
   unidades: [],
   conductores: [],
+  clientes: [],
   viajes: [],
   plantillas: [],
   actualizado: null
@@ -143,9 +147,9 @@ function cargar() {
       const d = JSON.parse(crudo);
       DB = Object.assign(ESTADO_INICIAL(), d);
       DB.catalogos = Object.assign(JSON.parse(JSON.stringify(CATALOGOS_DEF)), d.catalogos || {});
-      DB.empresa = Object.assign({ nombre: 'Mi Compañía de Transportes', dispatch: '', contacto: '' }, d.empresa || {});
+      DB.empresa = Object.assign({}, EMPRESA_DEF, d.empresa || {});
       DB.auth = Object.assign({ hash: '', salt: '', configurada: false }, d.auth || {});
-      ['unidades', 'conductores', 'viajes', 'plantillas'].forEach(k => {
+      ['unidades', 'conductores', 'clientes', 'viajes', 'plantillas'].forEach(k => {
         if (!Array.isArray(DB[k])) DB[k] = [];
       });
     }
@@ -261,8 +265,12 @@ function campo(c) {
   } else if (c.tipo === 'textarea') {
     control = `<textarea id="${id}" name="${c.k}" placeholder="${esc(c.ph || '')}">${esc(val)}</textarea>`;
   } else {
+    const dl = c.lista && c.lista.length ? 'dl_' + c.k : '';
     control = `<input id="${id}" name="${c.k}" type="${c.tipo || 'text'}" value="${esc(val)}"
-      placeholder="${esc(c.ph || '')}" ${c.paso ? `step="${c.paso}"` : ''} ${c.req ? 'required' : ''}>`;
+      placeholder="${esc(c.ph || '')}" ${c.paso ? `step="${c.paso}"` : ''} ${c.req ? 'required' : ''}
+      ${dl ? `list="${dl}"` : ''}>` +
+      (dl ? `<datalist id="${dl}">${[...new Set(c.lista)].filter(Boolean)
+        .map(o => `<option value="${esc(o)}">`).join('')}</datalist>` : '');
   }
   return `<div class="${cls}"><label for="${id}">${esc(c.t)}${c.req ? ' *' : ''}${control}</label></div>`;
 }
@@ -280,9 +288,18 @@ function leerForm() {
   return datos;
 }
 
-const opcionesUnidad = () => DB.unidades
+const esRemolque = u => (u.categoria || '') === 'Remolque';
+const opcionesUnidad = (categoria = '') => DB.unidades
+  .filter(u => !categoria || (u.categoria || 'Tractor') === categoria)
   .slice().sort((a, b) => String(a.numero).localeCompare(String(b.numero), 'es', { numeric: true }))
   .map(u => ({ v: u.id, t: `${u.numero || '(sin número)'}${u.placa ? ' · ' + u.placa : ''}${u.tipo ? ' · ' + u.tipo : ''}` }));
+
+/* sugerencias para origen / destino / cliente, sacadas del directorio y del historial */
+const nombresCliente = () => [...new Set(DB.clientes.map(c => c.nombre).concat(DB.viajes.map(v => v.cliente)))].filter(Boolean).sort();
+const lugares = () => [...new Set(
+  DB.clientes.map(c => [c.ciudad, c.estado].filter(Boolean).join(', '))
+    .concat(DB.clientes.map(c => c.nombre))
+    .concat(DB.viajes.flatMap(v => [v.origen, v.destino])))].filter(Boolean).sort();
 const opcionesConductor = () => DB.conductores
   .slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'))
   .map(c => ({ v: c.id, t: c.nombre || '(sin nombre)' }));
@@ -307,6 +324,7 @@ function conflictos(viaje) {
   return DB.viajes.filter(v =>
     v.id !== viaje.id && v.fecha === viaje.fecha && !cancelado(v) &&
     ((viaje.unidadId && v.unidadId === viaje.unidadId) ||
+     (viaje.remolqueId && v.remolqueId === viaje.remolqueId) ||
      (viaje.conductorId && v.conductorId === viaje.conductorId)) &&
     seEmpalman(v, viaje));
 }
@@ -320,11 +338,12 @@ function camposViaje(v = {}) {
     { k: 'estado', t: 'Estado', tipo: 'select', opciones: DB.catalogos.estadosViaje, valor: v.estado || DB.catalogos.estadosViaje[0], vacio: false },
     { k: 'horaSalida', t: 'Hora de salida', tipo: 'time', valor: v.horaSalida || '' },
     { k: 'horaLlegada', t: 'Hora estimada de llegada', tipo: 'time', valor: v.horaLlegada || '' },
-    { k: 'origen', t: 'Origen', valor: v.origen || '', ph: 'Ciudad / planta', req: true },
-    { k: 'destino', t: 'Destino', valor: v.destino || '', ph: 'Ciudad / cliente', req: true },
-    { k: 'cliente', t: 'Cliente', valor: v.cliente || '' },
+    { k: 'origen', t: 'Origen', valor: v.origen || '', ph: 'Ciudad / planta', req: true, lista: lugares() },
+    { k: 'destino', t: 'Destino', valor: v.destino || '', ph: 'Ciudad / cliente', req: true, lista: lugares() },
+    { k: 'cliente', t: 'Cliente', valor: v.cliente || '', lista: nombresCliente() },
     { k: 'referencia', t: 'Referencia / orden', valor: v.referencia || '' },
-    { k: 'unidadId', t: 'Unidad', tipo: 'select', opciones: opcionesUnidad(), valor: v.unidadId || '', vacio: '— sin asignar —' },
+    { k: 'unidadId', t: 'Tractor', tipo: 'select', opciones: opcionesUnidad('Tractor'), valor: v.unidadId || '', vacio: '— sin asignar —' },
+    { k: 'remolqueId', t: 'Remolque / caja', tipo: 'select', opciones: opcionesUnidad('Remolque'), valor: v.remolqueId || '', vacio: '— sin asignar —' },
     { k: 'conductorId', t: 'Conductor', tipo: 'select', opciones: opcionesConductor(), valor: v.conductorId || '', vacio: '— sin asignar —' },
     { k: 'carga', t: 'Carga / mercancía', valor: v.carga || '' },
     { k: 'millas', t: 'Millas / km', tipo: 'number', paso: '1', valor: v.millas || '' },
@@ -400,7 +419,8 @@ function verViaje(id) {
       ${fila('Ruta', `${v.origen || '?'} → ${v.destino || '?'}`)}
       ${fila('Cliente', v.cliente)}
       ${fila('Referencia', v.referencia)}
-      ${fila('Unidad', nombreUnidad(v.unidadId))}
+      ${fila('Tractor', nombreUnidad(v.unidadId))}
+      ${fila('Remolque', nombreUnidad(v.remolqueId))}
       ${fila('Conductor', nombreConductor(v.conductorId))}
       ${fila('Carga', v.carga)}
       ${fila('Millas / km', v.millas)}
@@ -440,7 +460,8 @@ const ordenarViajes = arr => arr.slice().sort((a, b) =>
 
 function tarjetaViaje(v) {
   const cls = claseEstado(v.estado);
-  const meta = [nombreUnidad(v.unidadId), nombreConductor(v.conductorId)].filter(Boolean).join(' · ');
+  const meta = [nombreUnidad(v.unidadId), nombreUnidad(v.remolqueId), nombreConductor(v.conductorId)]
+    .filter(Boolean).join(' · ');
   return `<div class="viaje e-${cls}" data-viaje="${v.id}" title="${esc(v.notas || '')}">
     <div class="hora">${esc(v.horaSalida || 's/h')}${v.horaLlegada ? ' – ' + esc(v.horaLlegada) : ''}</div>
     <div class="ruta">${esc(v.origen || '?')} → ${esc(v.destino || '?')}</div>
@@ -506,8 +527,9 @@ function renderSchedule() {
         { t: 'Origen', v: v => esc(v.origen) },
         { t: 'Destino', v: v => esc(v.destino) },
         { t: 'Cliente', v: v => esc(v.cliente) },
-        { t: 'Unidad', v: v => esc(nombreUnidad(v.unidadId)) },
-        { t: 'Conductor', v: v => esc(nombreConductor(v.conductorId)) },
+        { t: 'Tractor', v: v => esc(nombreUnidad(v.unidadId)) },
+        { t: 'Remolque', v: v => esc(nombreUnidad(v.remolqueId)) },
+        { t: 'Operador', v: v => esc(nombreConductor(v.conductorId)) },
         { t: 'Estado', v: v => `<span class="chip ${claseEstado(v.estado)}">${esc(v.estado || '')}</span>` }
       ], lista, v => `<button class="btn mini" data-viaje="${v.id}">Ver</button>` +
         (sesion.rol === 'admin' ? ` <button class="btn mini admin-only" data-editar-viaje="${v.id}">Editar</button>` : ''),
@@ -538,8 +560,10 @@ function tabla(cols, filas, accionesFn, vacio = 'Sin registros.') {
    ========================================================= */
 function camposUnidad(u = {}) {
   return [
-    { k: 'numero', t: 'Número económico', valor: u.numero || '', req: true, ph: 'Ej. 101' },
-    { k: 'placa', t: 'Placas', valor: u.placa || '' },
+    { k: 'numero', t: 'Número económico', valor: u.numero || '', req: true, ph: 'Ej. T-14 / AXL-1917' },
+    { k: 'categoria', t: 'Categoría', tipo: 'select', opciones: CATEGORIAS, valor: u.categoria || 'Tractor', vacio: false },
+    { k: 'placa', t: 'Placas (USA)', valor: u.placa || '' },
+    { k: 'placaMx', t: 'Placas (México)', valor: u.placaMx || '' },
     { k: 'tipo', t: 'Tipo', tipo: 'select', opciones: DB.catalogos.tiposUnidad, valor: u.tipo || '', vacio: '— sin tipo —' },
     { k: 'estado', t: 'Estado', tipo: 'select', opciones: DB.catalogos.estadosUnidad, valor: u.estado || DB.catalogos.estadosUnidad[0], vacio: false },
     { k: 'marca', t: 'Marca', valor: u.marca || '' },
@@ -586,11 +610,13 @@ function eliminarUnidad(id) {
 function renderInventario() {
   const q = ($('#buscarUnidad').value || '').toLowerCase();
   const fe = $('#filtroEstadoUnidad').value;
+  const fc = $('#filtroCategoria').value;
   const hoy = hoyISO();
   let filas = DB.unidades.filter(u => {
     if (fe && u.estado !== fe) return false;
+    if (fc && (u.categoria || 'Tractor') !== fc) return false;
     if (!q) return true;
-    return [u.numero, u.placa, u.tipo, u.marca, u.modelo, u.vin, u.ubicacion, u.capacidad, u.notas]
+    return [u.numero, u.placa, u.placaMx, u.tipo, u.marca, u.modelo, u.vin, u.ubicacion, u.capacidad, u.notas]
       .join(' ').toLowerCase().includes(q);
   });
   const o = estadoUI.ordenUnidades;
@@ -604,11 +630,13 @@ function renderInventario() {
   };
   const cols = [
     { t: 'Número', v: u => `<strong>${esc(u.numero || '—')}</strong>` },
+    { t: 'Categoría', v: u => `<span class="chip ${esRemolque(u) ? '' : 'info'}">${esc(u.categoria || 'Tractor')}</span>` },
     { t: 'Tipo', v: u => esc(u.tipo) },
-    { t: 'Placas', v: u => esc(u.placa) },
+    { t: 'Placas USA', v: u => esc(u.placa) },
+    { t: 'Placas MX', v: u => esc(u.placaMx) },
     { t: 'Marca / modelo', v: u => esc([u.marca, u.modelo, u.anio].filter(Boolean).join(' ')) },
-    { t: 'Capacidad', v: u => esc(u.capacidad) },
-    { t: 'Ubicación', v: u => esc(u.ubicacion) },
+    { t: 'VIN', v: u => esc(u.vin) },
+    { t: 'Operador', v: u => esc((DB.conductores.find(c => c.unidadId === u.id) || {}).nombre || '') },
     { t: 'Seguro', v: u => vence(u.seguro) },
     { t: 'Servicio', v: u => vence(u.proxServicio) },
     { t: 'Estado', v: u => `<span class="chip ${claseEstado(u.estado)}">${esc(u.estado || '')}</span>` }
@@ -630,12 +658,14 @@ function renderInventario() {
 function verUnidad(id) {
   const u = unidad(id);
   if (!u) return;
-  const prox = ordenarViajes(DB.viajes.filter(v => v.unidadId === id && v.fecha >= hoyISO())).slice(0, 6);
+  const prox = ordenarViajes(DB.viajes.filter(v => (v.unidadId === id || v.remolqueId === id) && v.fecha >= hoyISO())).slice(0, 6);
   const fila = (t, d) => d ? `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>` : '';
   abrirModal(`Unidad ${u.numero || u.placa || ''}`,
     `<div class="detalle"><dl>
       <dt>Estado</dt><dd><span class="chip ${claseEstado(u.estado)}">${esc(u.estado || '—')}</span></dd>
-      ${fila('Tipo', u.tipo)}${fila('Placas', u.placa)}
+      ${fila('Categoría', u.categoria || 'Tractor')}${fila('Tipo', u.tipo)}
+      ${fila('Placas USA', u.placa)}${fila('Placas México', u.placaMx)}
+      ${fila('Operador asignado', (DB.conductores.find(c => c.unidadId === u.id) || {}).nombre || '')}
       ${fila('Marca / modelo', [u.marca, u.modelo, u.anio].filter(Boolean).join(' '))}
       ${fila('VIN', u.vin)}${fila('Capacidad', u.capacidad)}${fila('Odómetro', u.odometro)}
       ${fila('Ubicación', u.ubicacion)}${fila('Vence seguro', u.seguro && fechaCorta(u.seguro))}
@@ -662,7 +692,7 @@ function camposConductor(c = {}) {
     { k: 'tipoLicencia', t: 'Tipo de licencia', valor: c.tipoLicencia || '', ph: 'Ej. Federal E / CDL-A' },
     { k: 'venceLicencia', t: 'Vence licencia', tipo: 'date', valor: c.venceLicencia || '' },
     { k: 'venceMedico', t: 'Vence examen médico', tipo: 'date', valor: c.venceMedico || '' },
-    { k: 'unidadId', t: 'Unidad asignada', tipo: 'select', opciones: opcionesUnidad(), valor: c.unidadId || '', vacio: '— sin asignar —' },
+    { k: 'unidadId', t: 'Tractor asignado', tipo: 'select', opciones: opcionesUnidad('Tractor'), valor: c.unidadId || '', vacio: '— sin asignar —' },
     { k: 'base', t: 'Base / patio', valor: c.base || '' },
     { k: 'notas', t: 'Notas', tipo: 'textarea', valor: c.notas || '', ancho: 'full' }
   ];
@@ -731,6 +761,100 @@ function renderConductores() {
 }
 
 /* =========================================================
+   CLIENTES (directorio de direcciones de entrega)
+   ========================================================= */
+function editarCliente(id) {
+  if (sesion.rol !== 'admin') return;
+  const ex = id ? DB.clientes.find(c => c.id === id) : null;
+  const c = ex || {};
+  const campos = [
+    { k: 'nombre', t: 'Nombre del cliente', valor: c.nombre || '', req: true, ancho: 'full' },
+    { k: 'direccion', t: 'Dirección', valor: c.direccion || '', ancho: 'full' },
+    { k: 'ciudad', t: 'Ciudad', valor: c.ciudad || '' },
+    { k: 'estado', t: 'Estado', valor: c.estado || '', ph: 'CA, TX, AZ…',
+      lista: [...new Set(DB.clientes.map(x => x.estado))].filter(Boolean) },
+    { k: 'cp', t: 'Código postal', valor: c.cp || '' },
+    { k: 'contacto', t: 'Contacto', valor: c.contacto || '' },
+    { k: 'telefono', t: 'Teléfono', valor: c.telefono || '' },
+    { k: 'horario', t: 'Horario de recibo', valor: c.horario || '', ph: 'Ej. 7:00–15:00' },
+    { k: 'notas', t: 'Notas', tipo: 'textarea', valor: c.notas || '', ancho: 'full' }
+  ];
+  abrirModal(ex ? c.nombre : 'Nuevo cliente', formHTML(campos), [
+    ...(ex ? [{ texto: 'Eliminar', clase: 'danger', accion: () => {
+      confirmar('Eliminar cliente', `¿Eliminar a ${ex.nombre} del directorio?`, () => {
+        DB.clientes = DB.clientes.filter(x => x.id !== ex.id);
+        guardar(); cerrarModal(); render(); toast('Cliente eliminado.');
+      }, 'Eliminar');
+    } }] : []),
+    { texto: 'Cancelar', clase: 'ghost', accion: cerrarModal },
+    { texto: 'Guardar', clase: 'primary', accion: () => {
+      const d = leerForm();
+      if (!d.nombre) return toast('El nombre del cliente es obligatorio.');
+      if (ex) Object.assign(ex, d); else DB.clientes.push(Object.assign({ id: uid() }, d));
+      guardar(); cerrarModal(); render(); toast('Cliente guardado.');
+    } }
+  ]);
+}
+
+function renderClientes() {
+  const q = ($('#buscarCliente').value || '').toLowerCase();
+  const fe = $('#filtroEstadoUS').value;
+  const filas = DB.clientes.filter(c => {
+    if (fe && c.estado !== fe) return false;
+    if (!q) return true;
+    return [c.nombre, c.direccion, c.ciudad, c.estado, c.contacto, c.telefono, c.notas]
+      .join(' ').toLowerCase().includes(q);
+  }).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
+
+  const cols = [
+    { t: 'Cliente', v: c => `<strong>${esc(c.nombre)}</strong>` },
+    { t: 'Dirección', v: c => esc(c.direccion) },
+    { t: 'Ciudad', v: c => esc(c.ciudad) },
+    { t: 'Estado', v: c => c.estado ? `<span class="chip">${esc(c.estado)}</span>` : '' },
+    { t: 'Contacto', v: c => esc([c.contacto, c.telefono].filter(Boolean).join(' · ')) },
+    { t: 'Horario', v: c => esc(c.horario) },
+    { t: 'Notas', v: c => esc(c.notas) }
+  ];
+  const cont = $('#tablaClientes');
+  cont.innerHTML = `<div class="tbl-wrap">${tabla(cols, filas,
+    c => sesion.rol === 'admin' ? `<button class="btn mini" data-editar-cliente="${c.id}">Editar</button>` : '',
+    'El directorio está vacío. Importa tu lista de clientes en CSV.')}</div>
+    <p class="hint">${filas.length} de ${DB.clientes.length} cliente(s)</p>`;
+  cont.onclick = e => {
+    const ed = e.target.closest('[data-editar-cliente]');
+    if (ed) editarCliente(ed.dataset.editarCliente);
+  };
+}
+
+function importarClientes(texto) {
+  const { registros } = deCSV(texto);
+  if (!registros.length) return toast('El archivo no tiene filas de datos.');
+  let nuevos = 0, actualizados = 0;
+  registros.forEach(r => {
+    const nombre = campoCSV(r, 'nombre', 'cliente', 'empresa', 'company', 'name', 'customer');
+    if (!nombre) return;
+    const datos = {
+      nombre,
+      direccion: campoCSV(r, 'direccion', 'domicilio', 'address', 'street'),
+      ciudad: campoCSV(r, 'ciudad', 'city'),
+      estado: campoCSV(r, 'estado', 'state'),
+      cp: campoCSV(r, 'cp', 'codigo postal', 'zip', 'zipcode'),
+      contacto: campoCSV(r, 'contacto', 'contact'),
+      telefono: campoCSV(r, 'telefono', 'tel', 'phone'),
+      horario: campoCSV(r, 'horario', 'hours', 'receiving'),
+      notas: campoCSV(r, 'notas', 'observaciones', 'notes')
+    };
+    Object.keys(datos).forEach(k => { if (datos[k] === '') delete datos[k]; });
+    const clave = (n, ciu) => (String(n) + '|' + String(ciu || '')).toLowerCase();
+    const ex = DB.clientes.find(c => clave(c.nombre, c.ciudad) === clave(nombre, datos.ciudad));
+    if (ex) { Object.assign(ex, datos); actualizados++; }
+    else { DB.clientes.push(Object.assign({ id: uid(), nombre }, datos)); nuevos++; }
+  });
+  guardar(); render();
+  toast(`Clientes: ${nuevos} nuevo(s), ${actualizados} actualizado(s).`);
+}
+
+/* =========================================================
    PLANTILLAS
    ========================================================= */
 function editarPlantilla(id) {
@@ -745,11 +869,12 @@ function editarPlantilla(id) {
     { k: 'nombre', t: 'Nombre de la plantilla', valor: p.nombre || '', req: true, ph: 'Ej. Ruta diaria Hermosillo–Nogales', ancho: 'full' },
     { k: 'horaSalida', t: 'Hora de salida', tipo: 'time', valor: p.horaSalida || '' },
     { k: 'horaLlegada', t: 'Hora de llegada', tipo: 'time', valor: p.horaLlegada || '' },
-    { k: 'origen', t: 'Origen', valor: p.origen || '', req: true },
-    { k: 'destino', t: 'Destino', valor: p.destino || '', req: true },
-    { k: 'cliente', t: 'Cliente', valor: p.cliente || '' },
+    { k: 'origen', t: 'Origen', valor: p.origen || '', req: true, lista: lugares() },
+    { k: 'destino', t: 'Destino', valor: p.destino || '', req: true, lista: lugares() },
+    { k: 'cliente', t: 'Cliente', valor: p.cliente || '', lista: nombresCliente() },
     { k: 'estado', t: 'Estado inicial', tipo: 'select', opciones: DB.catalogos.estadosViaje, valor: p.estado || DB.catalogos.estadosViaje[0], vacio: false },
-    { k: 'unidadId', t: 'Unidad', tipo: 'select', opciones: opcionesUnidad(), valor: p.unidadId || '', vacio: '— sin asignar —' },
+    { k: 'unidadId', t: 'Tractor', tipo: 'select', opciones: opcionesUnidad('Tractor'), valor: p.unidadId || '', vacio: '— sin asignar —' },
+    { k: 'remolqueId', t: 'Remolque / caja', tipo: 'select', opciones: opcionesUnidad('Remolque'), valor: p.remolqueId || '', vacio: '— sin asignar —' },
     { k: 'conductorId', t: 'Conductor', tipo: 'select', opciones: opcionesConductor(), valor: p.conductorId || '', vacio: '— sin asignar —' },
     { k: 'carga', t: 'Carga', valor: p.carga || '' },
     { k: 'tarifa', t: 'Tarifa ($)', tipo: 'number', paso: '0.01', valor: p.tarifa || '' },
@@ -830,7 +955,7 @@ function dialogoGenerar(plantillaId = '') {
              id: uid(), plantillaId: p.id, fecha: f,
              horaSalida: p.horaSalida || '', horaLlegada: p.horaLlegada || '',
              origen: p.origen || '', destino: p.destino || '', cliente: p.cliente || '',
-             unidadId: p.unidadId || '', conductorId: p.conductorId || '',
+             unidadId: p.unidadId || '', remolqueId: p.remolqueId || '', conductorId: p.conductorId || '',
              carga: p.carga || '', tarifa: p.tarifa || '', notas: p.notas || '',
              estado: p.estado || DB.catalogos.estadosViaje[0],
              creado: new Date().toISOString()
@@ -856,9 +981,10 @@ function renderPanel() {
   $('#kpis').innerHTML = [
     ['Viajes hoy', DB.viajes.filter(v => v.fecha === hoy && activo(v)).length],
     ['Viajes esta semana', enSemana.filter(activo).length],
-    ['Unidades totales', DB.unidades.length],
+    ['Tractores', DB.unidades.filter(u => !esRemolque(u)).length],
+    ['Remolques', DB.unidades.filter(esRemolque).length],
     ['Unidades disponibles', disponibles],
-    ['Conductores', DB.conductores.length],
+    ['Operadores', DB.conductores.length],
     ['Ingreso semana', '$' + enSemana.filter(activo).reduce((s, v) => s + (parseFloat(v.tarifa) || 0), 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })]
   ].map(([t, n]) => `<div class="kpi"><b>${esc(n)}</b><span>${esc(t)}</span></div>`).join('');
 
@@ -878,13 +1004,17 @@ function renderPanel() {
     const b = e.target.closest('[data-viaje]'); if (b) verViaje(b.dataset.viaje);
   };
 
-  const ocupadasHoy = new Set(DB.viajes.filter(v => v.fecha === hoy && activo(v) && v.unidadId).map(v => v.unidadId));
+  const ocupadasHoy = new Set(DB.viajes.filter(v => v.fecha === hoy && activo(v))
+    .flatMap(v => [v.unidadId, v.remolqueId]).filter(Boolean));
   const libres = DB.unidades.filter(u => !ocupadasHoy.has(u.id) && !/fuera|mantenim/i.test(u.estado || ''));
-  $('#panelDisp').innerHTML = `
-    <p class="muted">Unidades sin viaje asignado hoy (${libres.length}):</p>
-    ${libres.length ? '<div class="row">' + libres.map(u =>
+  const bloque = (titulo, lista) => `
+    <p class="muted">${titulo} (${lista.length}):</p>
+    ${lista.length ? '<div class="row">' + lista.map(u =>
       `<span class="chip ${claseEstado(u.estado)}">${esc(u.numero || u.placa)}${u.tipo ? ' · ' + esc(u.tipo) : ''}</span>`).join('') + '</div>'
-      : '<p class="muted">Todas las unidades tienen viaje o están fuera de servicio.</p>'}`;
+      : '<p class="muted">Ninguno libre: todos tienen viaje o están fuera de servicio.</p>'}`;
+  $('#panelDisp').innerHTML =
+    bloque('Tractores sin viaje hoy', libres.filter(u => !esRemolque(u))) +
+    bloque('Remolques sin viaje hoy', libres.filter(esRemolque));
 
   /* Avisos: vencimientos y empalmes */
   const avisos = [];
@@ -930,8 +1060,10 @@ function renderPanel() {
    IMPORTAR / EXPORTAR
    ========================================================= */
 const COLS_UNIDAD = [
-  { titulo: 'numero', valor: u => u.numero }, { titulo: 'tipo', valor: u => u.tipo },
-  { titulo: 'placa', valor: u => u.placa }, { titulo: 'marca', valor: u => u.marca },
+  { titulo: 'numero', valor: u => u.numero }, { titulo: 'categoria', valor: u => u.categoria || 'Tractor' },
+  { titulo: 'tipo', valor: u => u.tipo },
+  { titulo: 'placa', valor: u => u.placa }, { titulo: 'placaMx', valor: u => u.placaMx },
+  { titulo: 'marca', valor: u => u.marca },
   { titulo: 'modelo', valor: u => u.modelo }, { titulo: 'anio', valor: u => u.anio },
   { titulo: 'vin', valor: u => u.vin }, { titulo: 'capacidad', valor: u => u.capacidad },
   { titulo: 'odometro', valor: u => u.odometro }, { titulo: 'ubicacion', valor: u => u.ubicacion },
@@ -950,10 +1082,19 @@ const COLS_VIAJE = [
   { titulo: 'fecha', valor: v => v.fecha }, { titulo: 'horaSalida', valor: v => v.horaSalida },
   { titulo: 'horaLlegada', valor: v => v.horaLlegada }, { titulo: 'origen', valor: v => v.origen },
   { titulo: 'destino', valor: v => v.destino }, { titulo: 'cliente', valor: v => v.cliente },
-  { titulo: 'referencia', valor: v => v.referencia }, { titulo: 'unidad', valor: v => nombreUnidad(v.unidadId) },
+  { titulo: 'referencia', valor: v => v.referencia }, { titulo: 'tractor', valor: v => nombreUnidad(v.unidadId) },
+  { titulo: 'remolque', valor: v => nombreUnidad(v.remolqueId) },
   { titulo: 'conductor', valor: v => nombreConductor(v.conductorId) }, { titulo: 'carga', valor: v => v.carga },
   { titulo: 'millas', valor: v => v.millas }, { titulo: 'tarifa', valor: v => v.tarifa },
   { titulo: 'estado', valor: v => v.estado }, { titulo: 'notas', valor: v => v.notas }
+];
+
+const COLS_CLIENTE = [
+  { titulo: 'nombre', valor: c => c.nombre }, { titulo: 'direccion', valor: c => c.direccion },
+  { titulo: 'ciudad', valor: c => c.ciudad }, { titulo: 'estado', valor: c => c.estado },
+  { titulo: 'cp', valor: c => c.cp }, { titulo: 'contacto', valor: c => c.contacto },
+  { titulo: 'telefono', valor: c => c.telefono }, { titulo: 'horario', valor: c => c.horario },
+  { titulo: 'notas', valor: c => c.notas }
 ];
 
 /* Normaliza fechas de CSV: acepta 2026-07-31, 31/07/2026 y 7/31/2026 */
@@ -999,6 +1140,10 @@ function importarUnidades(texto) {
       notas: campoCSV(r, 'notas', 'observaciones', 'comentarios', 'notes')
     };
     Object.keys(datos).forEach(k => { if (datos[k] === '') delete datos[k]; });
+    datos.categoria = campoCSV(r, 'categoria', 'clase de unidad') ||
+      (/caja|plataforma|remolque|trailer|dolly/i.test(datos.tipo || '') ? 'Remolque' : 'Tractor');
+    datos.placaMx = campoCSV(r, 'placamx', 'placas mexico', 'placa mexicana');
+    Object.keys(datos).forEach(k => { if (datos[k] === '') delete datos[k]; });
     const ex = DB.unidades.find(u =>
       (numero && String(u.numero).toLowerCase() === String(numero).toLowerCase()) ||
       (placa && u.placa && String(u.placa).toLowerCase() === String(placa).toLowerCase()));
@@ -1037,6 +1182,52 @@ function importarConductores(texto) {
   });
   guardar(); render();
   toast(`Conductores: ${nuevos} nuevo(s), ${actualizados} actualizado(s).`);
+}
+
+/* ---- Carga del inventario propio de AXL (datos-axl.js) ---- */
+function cargarInventarioAXL(silencioso = false) {
+  if (typeof DATOS_AXL === 'undefined') { if (!silencioso) toast('No se encontró el archivo datos-axl.js.'); return; }
+  const igual = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  let unidadesNuevas = 0, conductoresNuevos = 0, clientesNuevos = 0;
+
+  if (!DB.empresa.nombre || DB.empresa.nombre === EMPRESA_DEF.nombre)
+    DB.empresa = Object.assign({}, DB.empresa, DATOS_AXL.empresa, {
+      dispatch: DB.empresa.dispatch || DATOS_AXL.empresa.dispatch,
+      contacto: DB.empresa.contacto || DATOS_AXL.empresa.contacto
+    });
+
+  const guardarUnidad = (datos, categoria) => {
+    let u = DB.unidades.find(x => igual(x.numero, datos.numero));
+    if (!u) { u = { id: uid() }; DB.unidades.push(u); unidadesNuevas++; }
+    Object.keys(datos).forEach(k => { if (datos[k] !== '' && datos[k] != null) u[k] = datos[k]; });
+    u.categoria = u.categoria || categoria;
+    u.estado = u.estado || DB.catalogos.estadosUnidad[0];
+    return u;
+  };
+
+  (DATOS_AXL.tractores || []).forEach(t => {
+    const { operador, ...datos } = t;
+    const u = guardarUnidad(Object.assign({ tipo: 'Tractocamión' }, datos), 'Tractor');
+    if (!operador) return;
+    let c = DB.conductores.find(x => igual(x.nombre, operador));
+    if (!c) { c = { id: uid(), nombre: operador, estado: DB.catalogos.estadosConductor[0] }; DB.conductores.push(c); conductoresNuevos++; }
+    if (!c.unidadId) c.unidadId = u.id;
+  });
+
+  (DATOS_AXL.remolques || []).forEach(r => guardarUnidad(r, 'Remolque'));
+
+  (DATOS_AXL.clientes || []).forEach(cl => {
+    let c = DB.clientes.find(x => igual(x.nombre, cl.nombre) && igual(x.ciudad, cl.ciudad));
+    if (!c) { c = { id: uid() }; DB.clientes.push(c); clientesNuevos++; }
+    Object.keys(cl).forEach(k => { if (cl[k] !== '' && cl[k] != null) c[k] = cl[k]; });
+  });
+
+  guardar();
+  if (!silencioso) {
+    render();
+    toast(`Inventario de AXL cargado: ${DB.unidades.length} unidades, ${DB.conductores.length} operadores, ${DB.clientes.length} clientes ` +
+      `(${unidadesNuevas} unidades, ${conductoresNuevos} operadores y ${clientesNuevos} clientes nuevos).`, 5000);
+  }
 }
 
 function respaldar() {
@@ -1079,7 +1270,11 @@ function llenarSelect(sel, opciones, textoVacio) {
 function render() {
   document.body.classList.toggle('role-guest', sesion.rol !== 'admin');
   $('#empresaNombre').textContent = DB.empresa.nombre || 'Compañía de transportes';
-  $('#empresaSub').textContent = DB.empresa.dispatch ? 'Dispatch: ' + DB.empresa.dispatch : 'Panel de control';
+  $('#empresaSub').textContent = [
+    DB.empresa.dispatch ? 'Dispatch: ' + DB.empresa.dispatch : '',
+    DB.empresa.caat ? 'CAAT ' + DB.empresa.caat : '',
+    DB.empresa.scac ? 'SCAC ' + DB.empresa.scac : ''
+  ].filter(Boolean).join(' · ') || 'Panel de control';
   $('#roleBadge').textContent = sesion.rol === 'admin' ? 'Administrador' : ('Consulta' + (sesion.nombre ? ' · ' + sesion.nombre : ''));
   $('#roleBadge').className = 'badge' + (sesion.rol === 'admin' ? ' admin' : '');
 
@@ -1088,6 +1283,7 @@ function render() {
   llenarSelect($('#filtroConductor'), opcionesConductor(), 'Todos los conductores');
   llenarSelect($('#filtroEstadoUnidad'), DB.catalogos.estadosUnidad, 'Todos los estados');
   llenarSelect($('#filtroEstadoConductor'), DB.catalogos.estadosConductor, 'Todos los estados');
+  llenarSelect($('#filtroEstadoUS'), [...new Set(DB.clientes.map(c => c.estado))].filter(Boolean).sort(), 'Todos los estados');
   $('#filtroEstado').value = estadoUI.fEstado;
   $('#filtroUnidad').value = estadoUI.fUnidad;
   $('#filtroConductor').value = estadoUI.fConductor;
@@ -1096,11 +1292,14 @@ function render() {
   renderSchedule();
   renderInventario();
   renderConductores();
+  renderClientes();
   renderPlantillas();
 
   $('#cfgEmpresa').value = DB.empresa.nombre || '';
   $('#cfgDispatch').value = DB.empresa.dispatch || '';
   $('#cfgContacto').value = DB.empresa.contacto || '';
+  $('#cfgCaat').value = DB.empresa.caat || '';
+  $('#cfgScac').value = DB.empresa.scac || '';
   $('#catEstadosViaje').value = DB.catalogos.estadosViaje.join(', ');
   $('#catEstadosUnidad').value = DB.catalogos.estadosUnidad.join(', ');
   $('#catTiposUnidad').value = DB.catalogos.tiposUnidad.join(', ');
@@ -1108,7 +1307,8 @@ function render() {
   $('#ultimoGuardado').textContent = DB.actualizado
     ? 'Última vez guardado: ' + new Date(DB.actualizado).toLocaleString('es-MX') : 'Todavía no hay información guardada.';
   $('#footerInfo').textContent =
-    `${DB.viajes.length} viajes · ${DB.unidades.length} unidades · ${DB.conductores.length} conductores · la información se guarda en este navegador`;
+    `${DB.viajes.length} viajes · ${DB.unidades.length} unidades · ${DB.conductores.length} operadores · ` +
+    `${DB.clientes.length} clientes · la información se guarda en este navegador`;
 }
 
 function irA(vista) {
@@ -1165,7 +1365,9 @@ function conectarEventos() {
   $('#tabs').onclick = e => { const t = e.target.closest('.tab'); if (t) irA(t.dataset.view); };
   $('#logoutBtn').onclick = salir;
   $('#themeBtn').onclick = () => {
-    const nuevo = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    const actual = document.documentElement.dataset.theme ||
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const nuevo = actual === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = nuevo;
     localStorage.setItem('axl_tema', nuevo);
   };
@@ -1206,6 +1408,7 @@ function conectarEventos() {
   /* Inventario */
   $('#buscarUnidad').oninput = renderInventario;
   $('#filtroEstadoUnidad').onchange = renderInventario;
+  $('#filtroCategoria').onchange = renderInventario;
   $('#nuevaUnidadBtn').onclick = () => editarUnidad(null);
   $('#importUnidadBtn').onclick = () => dialogoImportar('unidades');
   $('#exportUnidadBtn').onclick = () => descargar(`inventario-${hoyISO()}.csv`, aCSV(DB.unidades, COLS_UNIDAD), 'text/csv');
@@ -1217,6 +1420,13 @@ function conectarEventos() {
   $('#importConductorBtn').onclick = () => dialogoImportar('conductores');
   $('#exportConductorBtn').onclick = () => descargar(`conductores-${hoyISO()}.csv`, aCSV(DB.conductores, COLS_CONDUCTOR), 'text/csv');
 
+  /* Clientes */
+  $('#buscarCliente').oninput = renderClientes;
+  $('#filtroEstadoUS').onchange = renderClientes;
+  $('#nuevoClienteBtn').onclick = () => editarCliente(null);
+  $('#importClienteBtn').onclick = () => dialogoImportar('clientes');
+  $('#exportClienteBtn').onclick = () => descargar(`clientes-${hoyISO()}.csv`, aCSV(DB.clientes, COLS_CLIENTE), 'text/csv');
+
   /* Plantillas */
   $('#nuevaPlantillaBtn').onclick = () => editarPlantilla(null);
 
@@ -1225,9 +1435,13 @@ function conectarEventos() {
   $('#restoreBtn').onclick = restaurar;
   $('#empresaForm').onsubmit = e => {
     e.preventDefault();
-    DB.empresa = { nombre: $('#cfgEmpresa').value.trim(), dispatch: $('#cfgDispatch').value.trim(), contacto: $('#cfgContacto').value.trim() };
+    DB.empresa = {
+      nombre: $('#cfgEmpresa').value.trim(), dispatch: $('#cfgDispatch').value.trim(),
+      contacto: $('#cfgContacto').value.trim(), caat: $('#cfgCaat').value.trim(), scac: $('#cfgScac').value.trim()
+    };
     guardar(); render(); toast('Datos de la compañía guardados.');
   };
+  $('#cargarAxlBtn').onclick = () => cargarInventarioAXL();
   $('#passForm').onsubmit = async e => {
     e.preventDefault();
     const act = $('#passActual').value, n1 = $('#passNueva').value, n2 = $('#passNueva2').value;
@@ -1274,28 +1488,36 @@ function conectarEventos() {
     }, 'Borrar todo');
 }
 
+const IMPORTABLES = {
+  unidades: { titulo: 'Importar inventario (CSV)', cols: COLS_UNIDAD, archivo: 'plantilla-inventario.csv',
+    clave: 'el número económico o la placa', fn: t => importarUnidades(t) },
+  conductores: { titulo: 'Importar operadores (CSV)', cols: COLS_CONDUCTOR, archivo: 'plantilla-conductores.csv',
+    clave: 'el nombre', fn: t => importarConductores(t) },
+  clientes: { titulo: 'Importar clientes (CSV)', cols: COLS_CLIENTE, archivo: 'plantilla-clientes.csv',
+    clave: 'el nombre y la ciudad', fn: t => importarClientes(t) }
+};
 function dialogoImportar(tipo) {
   if (sesion.rol !== 'admin') return;
-  const esUnidades = tipo === 'unidades';
-  const cols = (esUnidades ? COLS_UNIDAD : COLS_CONDUCTOR).map(c => c.titulo).join(', ');
-  abrirModal(esUnidades ? 'Importar inventario (CSV)' : 'Importar conductores (CSV)',
+  const cfg = IMPORTABLES[tipo];
+  abrirModal(cfg.titulo,
     `<p>Sube un archivo <b>CSV</b> (en Excel: <i>Archivo → Guardar como → CSV</i>). La primera fila debe tener los títulos de las columnas.</p>
-     <p class="muted">Columnas reconocidas (los nombres pueden variar, se detectan automáticamente):<br><code>${esc(cols)}</code></p>
-     <p class="muted">Si ${esUnidades ? 'el número económico o la placa' : 'el nombre'} ya existe, el registro se <b>actualiza</b> en lugar de duplicarse.</p>`,
-    [{ texto: 'Descargar plantilla CSV', clase: 'ghost', accion: () =>
-        descargar(esUnidades ? 'plantilla-inventario.csv' : 'plantilla-conductores.csv',
-          aCSV([], esUnidades ? COLS_UNIDAD : COLS_CONDUCTOR), 'text/csv') },
+     <p class="muted">Columnas reconocidas (los nombres pueden variar, se detectan automáticamente):<br><code>${esc(cfg.cols.map(c => c.titulo).join(', '))}</code></p>
+     <p class="muted">Si ${cfg.clave} ya existe, el registro se <b>actualiza</b> en lugar de duplicarse.</p>`,
+    [{ texto: 'Descargar plantilla CSV', clase: 'ghost', accion: () => descargar(cfg.archivo, aCSV([], cfg.cols), 'text/csv') },
      { texto: 'Cancelar', clase: 'ghost', accion: cerrarModal },
      { texto: 'Elegir archivo', clase: 'primary', accion: () => {
         cerrarModal();
-        pedirArchivo('.csv,.txt,text/csv', t => esUnidades ? importarUnidades(t) : importarConductores(t));
+        pedirArchivo('.csv,.txt,text/csv', cfg.fn);
       } }]);
 }
 
 /* ---------------- Arranque ---------------- */
 function iniciar() {
-  document.documentElement.dataset.theme = localStorage.getItem('axl_tema') || 'light';
+  const tema = localStorage.getItem('axl_tema');
+  if (tema) document.documentElement.dataset.theme = tema;   // si no, manda el tema del sistema
   cargar();
+  /* La primera vez que se abre, se carga el inventario propio de AXL */
+  if (!DB.unidades.length && !DB.conductores.length && !DB.clientes.length) cargarInventarioAXL(true);
   conectarEventos();
   $('#loginEmpresa').textContent = DB.empresa.nombre || 'Control de Schedule y Flota';
   $('#firstRunHint').textContent = DB.auth.configurada

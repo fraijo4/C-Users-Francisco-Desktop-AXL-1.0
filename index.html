@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Control de Schedule y Flota</title>
+<title>AXL Transport — Schedule y Flota</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚚</text></svg>">
 </head>
@@ -62,6 +62,7 @@
     <button class="tab" data-view="schedule">Schedule</button>
     <button class="tab" data-view="inventario">Inventario</button>
     <button class="tab" data-view="conductores">Conductores</button>
+    <button class="tab" data-view="clientes">Clientes</button>
     <button class="tab" data-view="plantillas">Plantillas</button>
     <button class="tab" data-view="datos">Datos y Ajustes</button>
   </nav>
@@ -117,7 +118,12 @@
     <!-- INVENTARIO -->
     <section id="view-inventario" class="view hidden">
       <div class="toolbar">
-        <input type="search" id="buscarUnidad" placeholder="Buscar unidad, placa, tipo…">
+        <input type="search" id="buscarUnidad" placeholder="Buscar unidad, placa, VIN, tipo…">
+        <select id="filtroCategoria">
+          <option value="">Tractores y remolques</option>
+          <option value="Tractor">Solo tractores</option>
+          <option value="Remolque">Solo remolques</option>
+        </select>
         <select id="filtroEstadoUnidad"><option value="">Todos los estados</option></select>
         <div class="spacer"></div>
         <button class="btn primary admin-only" id="nuevaUnidadBtn">+ Nueva unidad</button>
@@ -138,6 +144,19 @@
         <button class="btn ghost" id="exportConductorBtn">Exportar CSV</button>
       </div>
       <div class="panel"><div id="tablaConductores"></div></div>
+    </section>
+
+    <!-- CLIENTES -->
+    <section id="view-clientes" class="view hidden">
+      <div class="toolbar">
+        <input type="search" id="buscarCliente" placeholder="Buscar cliente, ciudad, estado…">
+        <select id="filtroEstadoUS"><option value="">Todos los estados</option></select>
+        <div class="spacer"></div>
+        <button class="btn primary admin-only" id="nuevoClienteBtn">+ Nuevo cliente</button>
+        <button class="btn admin-only" id="importClienteBtn">Importar CSV</button>
+        <button class="btn ghost" id="exportClienteBtn">Exportar CSV</button>
+      </div>
+      <div class="panel"><div id="tablaClientes"></div></div>
     </section>
 
     <!-- PLANTILLAS -->
@@ -169,8 +188,17 @@
             <label>Nombre de la compañía<input type="text" id="cfgEmpresa"></label>
             <label>Dispatch a cargo<input type="text" id="cfgDispatch"></label>
             <label>Teléfono / contacto<input type="text" id="cfgContacto"></label>
+            <div class="row">
+              <label style="flex:1">CAAT<input type="text" id="cfgCaat"></label>
+              <label style="flex:1">SCAC<input type="text" id="cfgScac"></label>
+            </div>
             <button class="btn primary" type="submit">Guardar</button>
           </form>
+        </div>
+        <div class="panel admin-only">
+          <h2>Inventario de AXL</h2>
+          <p class="muted">Vuelve a cargar los tractores, remolques, operadores y clientes que ya están capturados. Lo que ya existe se actualiza; nada se duplica y no se borra lo que hayas agregado.</p>
+          <button class="btn" id="cargarAxlBtn">Cargar inventario de AXL</button>
         </div>
         <div class="panel admin-only">
           <h2>Contraseña de administrador</h2>
@@ -225,6 +253,7 @@
 <div id="toast" class="toast hidden"></div>
 <input type="file" id="filePicker" class="hidden">
 
+<script src="datos-axl.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

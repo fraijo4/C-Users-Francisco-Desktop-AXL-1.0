@@ -1,8 +1,12 @@
-# Control de Schedule y Flota
+# AXL Transport — Schedule y Flota
 
-Página web para llevar el schedule de viajes, el inventario de unidades y los conductores
-de una compañía de transportes. No necesita internet, servidor ni instalación: son tres
-archivos que se abren en el navegador.
+Página web para llevar el schedule de viajes, el inventario de tractores y remolques, los
+operadores y el directorio de clientes de AXL Transport. No necesita internet, servidor ni
+instalación: son archivos que se abren en el navegador.
+
+El inventario de AXL ya viene cargado (`datos-axl.js`): 11 tractores con su operador
+asignado, 19 remolques entre cajas secas, refrigeradas y plataformas, y el directorio de
+clientes capturado hasta ahora. Todo es editable desde la misma página.
 
 ## Cómo abrirla
 
@@ -12,6 +16,10 @@ Chrome, Edge o Firefox.
 **Opción para que la vean tus empleados:** publica esta carpeta en GitHub Pages
 (Settings → Pages → Branch: la rama de este proyecto → carpeta `/root`). Te queda una
 dirección de internet que cualquiera puede abrir desde su celular o computadora.
+
+**Versión de un solo archivo:** `node build.mjs` genera `dist/axl.html`, que junta el HTML,
+el CSS y el JavaScript en un archivo. Sirve para mandarlo por correo o subirlo a cualquier
+lado sin llevar la carpeta completa.
 
 ## Los dos tipos de acceso
 
@@ -38,10 +46,15 @@ Quien solo va a consultar entra en la pestaña **Consulta**, sin contraseña.
   Se navega con `‹ Hoy ›`. En la vista de semana, el administrador agrega un viaje con el
   botón *+ Agregar* del día. Se puede filtrar por unidad, conductor, estado o buscar texto,
   y exportar lo filtrado a CSV.
-- **Inventario** — todas las unidades: número económico, tipo, placas, marca, modelo, año,
-  VIN, capacidad, odómetro, ubicación, estado y fechas de seguro, verificación y servicio.
-- **Conductores** — nombre, teléfono, licencia y su vigencia, examen médico, unidad
-  asignada y base.
+- **Inventario** — tractores y remolques en una sola lista, con filtro para ver solo unos u
+  otros: número económico, categoría, tipo, placas de USA y de México, marca, modelo, año,
+  VIN, capacidad, odómetro, ubicación, operador asignado, estado y fechas de seguro,
+  verificación y servicio.
+- **Conductores** — nombre, teléfono, licencia y su vigencia, examen médico, tractor
+  asignado y base.
+- **Clientes** — el directorio de entregas: nombre, dirección, ciudad, estado, contacto,
+  teléfono y horario de recibo. Los clientes y sus ciudades aparecen como sugerencias al
+  capturar el origen y el destino de un viaje, para no escribirlos completos cada vez.
 - **Plantillas** — rutas que se repiten (por ejemplo: lunes, miércoles y viernes,
   Hermosillo → Nogales, 5:00 am). Con el botón **Generar** llenas el schedule de una semana
   o un mes completo de un jalón. Si un viaje ya fue generado antes, no se duplica.
@@ -86,3 +99,19 @@ natural si lo necesitas.
 | `index.html` | La estructura de la página |
 | `styles.css` | Los estilos (incluye modo claro y oscuro con el botón 🌓) |
 | `app.js` | Toda la lógica: schedule, inventario, plantillas, importación y respaldos |
+| `datos-axl.js` | El inventario de AXL: tractores, remolques, operadores y clientes |
+| `build.mjs` | Genera `dist/axl.html`, la versión de un solo archivo |
+
+## Datos por confirmar
+
+Al capturar el inventario quedaron tres cosas marcadas dentro de la misma página, en las
+notas de cada registro:
+
+- **VAT-05** — solo se tiene el VIN `1FUJA6CKX4LM61270` y el operador; faltan marca, año y
+  placas.
+- **AXL-4680** — la placa registrada (`4SG4675CA`) no coincide con el número de caja.
+- **NPT San Marcos** — falta confirmar si es el de California o el de Texas.
+
+El archivo histórico (tractores VAT01–VAT07, seguros, títulos, DMV, verificaciones, valores
+de compra y estado de importación) todavía no está cargado: se puede meter como un módulo
+de activos aparte para no mezclarlo con las unidades en operación.
