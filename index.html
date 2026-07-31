@@ -16,23 +16,13 @@
     <h1 id="loginEmpresa">Control de Schedule y Flota</h1>
     <p class="muted">Entra como administrador para editar, o como consulta para solo revisar información.</p>
 
-    <div class="login-tabs">
-      <button class="ltab active" data-mode="admin">Administrador</button>
-      <button class="ltab" data-mode="guest">Consulta</button>
-    </div>
-
     <form id="loginForm" class="login-form">
-      <div id="adminFields">
-        <label>Contraseña de administrador
-          <input type="password" id="loginPass" autocomplete="current-password" placeholder="••••••••">
-        </label>
-      </div>
-      <div id="guestFields" class="hidden">
-        <label>Tu nombre (opcional)
-          <input type="text" id="guestName" placeholder="Ej. Juan Pérez">
-        </label>
-        <p class="hint">Modo consulta: puedes ver el schedule, la disponibilidad y el inventario, pero no modificar nada.</p>
-      </div>
+      <label>Usuario
+        <input type="text" id="loginUsuario" autocomplete="username" placeholder="tu usuario" autocapitalize="off" spellcheck="false">
+      </label>
+      <label>Contraseña
+        <input type="password" id="loginPass" autocomplete="current-password" placeholder="••••••••">
+      </label>
       <p id="loginError" class="error hidden"></p>
       <button class="btn primary block" type="submit">Entrar</button>
     </form>
@@ -229,14 +219,22 @@
           <button class="btn" id="cargarAxlBtn">Cargar inventario de AXL</button>
         </div>
         <div class="panel admin-only">
-          <h2>Contraseña de administrador</h2>
+          <h2>Mi contraseña</h2>
           <form id="passForm" class="form">
             <label>Contraseña actual<input type="password" id="passActual" autocomplete="current-password"></label>
             <label>Nueva contraseña<input type="password" id="passNueva" autocomplete="new-password"></label>
             <label>Repetir nueva contraseña<input type="password" id="passNueva2" autocomplete="new-password"></label>
-            <button class="btn primary" type="submit">Cambiar contraseña</button>
+            <button class="btn primary" type="submit">Cambiar mi contraseña</button>
           </form>
-          <p class="hint">Aviso: esta protección evita ediciones accidentales de quien consulta la página, pero no es seguridad de nivel servidor. No guardes aquí información confidencial.</p>
+        </div>
+        <div class="panel admin-only">
+          <h2>Usuarios</h2>
+          <p class="muted">Quien tiene permiso de <b>editar</b> captura y modifica todo; quien es de <b>consulta</b> ve la página completa pero no puede cambiar nada.</p>
+          <div id="tablaUsuarios"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn primary" id="nuevoUsuarioBtn">+ Nuevo usuario</button>
+          </div>
+          <p class="hint">Aviso: esto separa lo que cada quien puede hacer y evita cambios accidentales, pero no es seguridad de nivel bancario — todo corre en el navegador. No guardes aquí información confidencial.</p>
         </div>
         <div class="panel admin-only">
           <h2>Catálogos</h2>

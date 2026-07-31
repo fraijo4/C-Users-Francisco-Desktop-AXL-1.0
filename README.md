@@ -21,39 +21,51 @@ dirección de internet que cualquiera puede abrir desde su celular o computadora
 el CSS y el JavaScript en un archivo. Sirve para mandarlo por correo o subirlo a cualquier
 lado sin llevar la carpeta completa.
 
-## Los dos tipos de acceso
+## Usuarios y accesos
 
-| | Administrador | Consulta |
-|---|---|---|
-| Ver schedule, inventario, conductores y disponibilidad | Sí | Sí |
-| Exportar a CSV y descargar respaldos | Sí | Sí |
-| Crear, editar y borrar cualquier cosa | Sí | No |
+Cada persona entra con **su propio usuario y contraseña**. Hay dos permisos:
 
-La **primera vez** que se abre la página, la contraseña que escribas queda guardada como
-la del administrador. Después se cambia en *Datos y Ajustes → Contraseña de administrador*.
-Quien solo va a consultar entra en la pestaña **Consulta**, sin contraseña.
+- **Puede editar** — captura y modifica todo: viajes, casillas de avance, inventario,
+  operadores, clientes, plantillas y ajustes.
+- **Solo consulta** — ve la página completa (schedule, inventario, disponibilidad,
+  directorio) pero no puede cambiar absolutamente nada, ni marcar casillas.
 
-> Aviso importante: esta contraseña evita que quien consulta modifique la información por
-> accidente, pero no es seguridad de nivel bancario — todo corre en el navegador. No
-> guardes aquí datos confidenciales (números de cuenta, documentos personales).
+Vienen cinco cuentas creadas de fábrica: dos que editan y tres de consulta. **Cámbiales la
+contraseña en cuanto entres** — se hace en *Datos y Ajustes → Usuarios → Cambiar clave*.
+Desde ahí también se dan de alta más personas, se les cambia el permiso o se les quita el acceso.
+
+Las contraseñas se guardan **cifradas**: nadie, ni tú, puede volver a verlas. Si a alguien se
+le olvida la suya, quien tiene permiso de editar le pone una nueva.
+
+> Aviso: esto separa lo que cada quien puede hacer y evita cambios accidentales, pero no es
+> seguridad de nivel bancario — todo corre en el navegador. No guardes aquí información
+> confidencial.
 
 ## Qué tiene cada pestaña
 
 - **Panel** — viajes de hoy y mañana, unidades libres, ingreso de la semana y avisos
-  automáticos: seguros, verificaciones y licencias por vencer (o vencidas), viajes sin
-  unidad o sin conductor, y empalmes.
+  automáticos: seguros, verificaciones y licencias por vencer (o vencidas) y viajes sin
+  unidad o sin operador asignado. Incluye el contador de **pendientes de días pasados**.
 - **Schedule** — cuatro vistas: **Hoja diaria** (la que sale al entrar), **Semana**, **Mes** y **Lista**.
 
   La **hoja diaria** es el mismo formato de siempre: un bloque por día con el encabezado
-  *Lunes 07/27/2026* y la tabla con Hora, Cliente, Operador, Origen, Destino, Stop, Tractor,
+  *Lunes 07/27/2026* y la tabla con Cliente, Operador, Origen, Destino, Stop, Tractor,
   Remolque, Facturas y las cuatro casillas de avance: **Papeles · Previo · Cruzó · Entregado**.
 
-  - Las casillas se pican y se guardan solas. Marcar *Entregado* pone el viaje en estado
-    Entregado; desmarcarlo lo regresa a Programado.
-  - El administrador **edita sobre la tabla**: clic en cualquier celda de texto y escribes
-    (Enter guarda, Escape cancela); operador, tractor y remolque son listas desplegables.
-    Si al reasignar una unidad quedan viajes encimados, avisa en el momento.
-  - Quien entra en modo consulta ve la hoja igual, pero sin poder tocarla.
+  - Las casillas se pican y se guardan solas, y queda registrado **quién las marcó y qué
+    día** (se ve al pasar el cursor encima y en el detalle del viaje).
+  - Al marcar **Entregado**, el viaje se da por terminado: sale de los renglones en curso y
+    baja a una sección plegable **✓ Completados** de ese día. Si lo desmarcas, regresa arriba.
+  - Hasta arriba aparece **Pendientes de días anteriores**: todo lo que salió antes de la
+    semana que estás viendo y sigue sin entregarse, con los días que lleva arrastrando.
+    Ahí viven los viajes largos (Marion, Houston) que cruzan de una semana a otra.
+  - Quien puede editar lo hace **sobre la tabla**: clic en cualquier celda de texto y
+    escribes (Enter guarda, Escape cancela); operador, tractor y remolque son listas.
+  - Quien es de consulta ve la hoja igual, pero sin poder tocarla.
+
+  No hay columna de hora: dentro de cada día los viajes van en el orden en que se capturaron,
+  y una misma unidad puede dar dos vueltas el mismo día sin que la página lo tome por error.
+
   Se navega con `‹ Hoy ›`. Se puede filtrar por unidad, conductor, estado o buscar texto,
   y exportar lo filtrado a CSV. Cada viaje se pinta con el **color de su cliente** y trae un
   punto con el **color del operador**; arriba aparece la leyenda de los colores de la semana.
@@ -61,7 +73,7 @@ Quien solo va a consultar entra en la pestaña **Consulta**, sin contraseña.
   Hay cuatro formas de programar un viaje, de la más rápida a la más detallada:
 
   1. **Una línea:** escribes `mañana 6am T-14 Ontario a NPT Houston` y presionas Enter.
-     Reconoce la fecha (hoy, mañana, días de la semana, `15/08`), la hora, el número
+     Reconoce la fecha (hoy, mañana, días de la semana, `15/08`), el número
      económico, el operador y el cliente. Antes de guardar te muestra qué entendió.
   2. **Pegar lista:** pegas varios renglones de Excel, WhatsApp o un correo — un viaje por
      renglón — y los interpreta todos de una vez.
@@ -95,14 +107,15 @@ al cargar la información, y se cambian a mano en la ficha del cliente o del ope
 el schedule se repinta al instante. El tractor toma el color de su operador asignado, así
 que en el inventario se reconoce de un vistazo de quién es cada unidad.
 - **Plantillas** — rutas que se repiten (por ejemplo: lunes, miércoles y viernes,
-  Hermosillo → Nogales, 5:00 am). Con el botón **Generar** llenas el schedule de una semana
+  Hermosillo → Nogales). Con el botón **Generar** llenas el schedule de una semana
   o un mes completo de un jalón. Si un viaje ya fue generado antes, no se duplica.
-- **Datos y Ajustes** — respaldos, nombre de la compañía, contraseña, catálogos y borrado.
+- **Datos y Ajustes** — respaldos, datos de la compañía, **usuarios y contraseñas**,
+  formato de fecha, catálogos, carga del inventario de AXL y borrado.
 
 ## Cargar el inventario que ya tienes
 
 1. En Excel, guarda tu archivo como **CSV** (*Archivo → Guardar como → CSV*).
-2. Entra como administrador a **Inventario → Importar CSV**.
+2. Entra con una cuenta que pueda editar y ve a **Inventario → Importar CSV**.
 3. Si quieres, descarga primero la plantilla con los nombres de columna sugeridos.
 
 La primera fila del archivo debe tener los títulos de las columnas. Los nombres se detectan

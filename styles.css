@@ -162,6 +162,24 @@ html[data-theme="dark"]{ --hoja-head:#5b5210; --hoja-head-ink:#fbeaa0; --hoja-ce
 .dia-vacio b{color:var(--ink);font-weight:600}
 .dia-vacio .btn{margin-left:auto}
 
+/* Pendientes de días anteriores: lo que se arrastra y no se ha entregado */
+.dia-bloque.pendientes .dia-titulo h3{color:var(--warn)}
+.dia-bloque.pendientes .hoja-wrap{border-color:color-mix(in srgb,var(--warn) 45%,var(--line));
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--warn) 25%,transparent)}
+.cel.salio{color:var(--warn);font-weight:600;white-space:nowrap}
+
+/* Sección plegable de lo ya completado */
+details.completados{margin-top:8px}
+details.completados > summary{cursor:pointer;color:var(--ok);font-size:13px;font-weight:600;
+  padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);
+  list-style:none;display:flex;align-items:center;gap:6px}
+details.completados > summary::-webkit-details-marker{display:none}
+details.completados > summary::before{content:'▸';transition:transform .12s ease}
+details[open].completados > summary::before{transform:rotate(90deg)}
+details.completados > summary:hover{border-color:var(--ok)}
+details.completados .hoja-wrap{margin-top:6px}
+details.completados table.hoja tbody tr{opacity:.72}
+
 .hoja-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel);box-shadow:var(--shadow)}
 table.hoja{border-collapse:collapse;width:100%;min-width:1040px;font-size:13px;background:var(--hoja-cel)}
 table.hoja th{background:var(--hoja-head);color:var(--hoja-head-ink);text-transform:none;letter-spacing:0;

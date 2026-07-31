@@ -138,6 +138,7 @@ const ESTADO_INICIAL = () => ({
   version: 2,
   empresa: Object.assign({}, EMPRESA_DEF),
   auth: { hash: '', salt: '', configurada: false },
+  usuarios: [],
   catalogos: JSON.parse(JSON.stringify(CATALOGOS_DEF)),
   preferencias: { formatoFecha: 'mdy' },
   unidades: [],
@@ -149,7 +150,7 @@ const ESTADO_INICIAL = () => ({
 });
 
 let DB = ESTADO_INICIAL();
-let sesion = { rol: 'guest', nombre: '' };
+let sesion = { rol: 'consulta', nombre: '', usuario: '', id: '' };
 
 function cargar() {
   try {
@@ -161,7 +162,7 @@ function cargar() {
       DB.empresa = Object.assign({}, EMPRESA_DEF, d.empresa || {});
       DB.auth = Object.assign({ hash: '', salt: '', configurada: false }, d.auth || {});
       DB.preferencias = Object.assign({ formatoFecha: 'mdy' }, d.preferencias || {});
-      ['unidades', 'conductores', 'clientes', 'viajes', 'plantillas'].forEach(k => {
+      ['unidades', 'conductores', 'clientes', 'viajes', 'plantillas', 'usuarios'].forEach(k => {
         if (!Array.isArray(DB[k])) DB[k] = [];
       });
       DB.viajes.forEach(v => {
@@ -185,6 +186,40 @@ function guardar() {
   }
 }
 
+/* ---------------- Usuarios ---------------- */
+/* Cinco cuentas de arranque: dos que editan y tres de consulta.
+   Todas se pueden renombrar, cambiar de permiso o borrar desde Ajustes. */
+const USUARIOS_DEF = [
+  { usuario: 'francisco', nombre: 'Francisco — dueño y dispatch', rol: 'admin', clave: 'AXL-dueno-2026' },
+  { usuario: 'oficina', nombre: 'Oficina — segundo dispatch', rol: 'admin', clave: 'AXL-oficina-2026' },
+  { usuario: 'consulta1', nombre: 'Consulta 1', rol: 'consulta', clave: 'AXL-ver1-2026' },
+  { usuario: 'consulta2', nombre: 'Consulta 2', rol: 'consulta', clave: 'AXL-ver2-2026' },
+  { usuario: 'consulta3', nombre: 'Consulta 3', rol: 'consulta', clave: 'AXL-ver3-2026' }
+];
+const ROLES = { admin: 'Puede editar', consulta: 'Solo consulta' };
+const buscarUsuario = u => DB.usuarios.find(x => x.usuario.toLowerCase() === String(u || '').trim().toLowerCase());
+const cuantosAdmin = () => DB.usuarios.filter(u => u.rol === 'admin').length;
+
+async function crearUsuario({ usuario, nombre, rol, clave }) {
+  const salt = uid() + uid();
+  return { id: uid(), usuario, nombre, rol, salt, hash: await hashPass(clave, salt), creado: new Date().toISOString() };
+}
+
+/* Se ejecuta una sola vez: crea las cuentas de arranque.
+   Si ya había una contraseña de administrador, se conserva en la cuenta principal. */
+async function sembrarUsuarios() {
+  if (Array.isArray(DB.usuarios) && DB.usuarios.length) return false;
+  DB.usuarios = [];
+  for (const d of USUARIOS_DEF) DB.usuarios.push(await crearUsuario(d));
+  if (DB.auth && DB.auth.configurada) {           // respeta la clave que ya se había puesto
+    DB.usuarios[0].salt = DB.auth.salt;
+    DB.usuarios[0].hash = DB.auth.hash;
+    DB.usuarios[0].notaClave = 'Conserva la contraseña que ya tenías.';
+  }
+  guardar();
+  return true;
+}
+
 /* ---------------- Contraseña ---------------- */
 async function hashPass(pass, salt) {
   const txt = salt + '|' + pass;
@@ -200,13 +235,13 @@ async function hashPass(pass, salt) {
   }
   return 'f' + h1.toString(16) + h2.toString(16);
 }
-async function definirPass(pass) {
-  const salt = uid() + uid();
-  DB.auth = { salt, hash: await hashPass(pass, salt), configurada: true };
+async function cambiarClave(u, clave) {
+  u.salt = uid() + uid();
+  u.hash = await hashPass(clave, u.salt);
+  delete u.notaClave;
 }
-async function verificarPass(pass) {
-  if (!DB.auth.configurada) return false;
-  return (await hashPass(pass, DB.auth.salt)) === DB.auth.hash;
+async function claveCorrecta(u, clave) {
+  return !!u && (await hashPass(clave, u.salt)) === u.hash;
 }
 
 /* ---------------- Búsquedas por id ---------------- */
@@ -366,28 +401,16 @@ const opcionesConductor = () => DB.conductores
   .map(c => ({ v: c.id, t: c.nombre || '(sin nombre)' }));
 
 /* ---------------- Detección de empalmes ---------------- */
-function minutos(h) {
-  if (!h) return null;
-  const [a, b] = String(h).split(':').map(Number);
-  return (isNaN(a) ? null : a * 60 + (b || 0));
-}
-function seEmpalman(a, b) {
-  const a1 = minutos(a.horaSalida), a2 = minutos(a.horaLlegada);
-  const b1 = minutos(b.horaSalida), b2 = minutos(b.horaLlegada);
-  if (a1 === null || b1 === null) return true;           // sin horas: se considera conflicto el mismo día
-  const fa = a2 === null || a2 <= a1 ? a1 + 60 : a2;
-  const fb = b2 === null || b2 <= b1 ? b1 + 60 : b2;
-  return a1 < fb && b1 < fa;
-}
-function conflictos(viaje) {
-  const cancelado = v => /cancel/i.test(v.estado || '');
-  if (cancelado(viaje)) return [];
+/* Una unidad puede dar dos vueltas el mismo día — eso es normal aquí.
+   Ya no se avisa de "empalmes"; solo se informa cuando algo se repite. */
+function repeticionesDelDia(viaje) {
+  const activo = v => !/cancel/i.test(v.estado || '');
+  if (!activo(viaje)) return [];
   return DB.viajes.filter(v =>
-    v.id !== viaje.id && v.fecha === viaje.fecha && !cancelado(v) &&
+    v.id !== viaje.id && v.fecha === viaje.fecha && activo(v) &&
     ((viaje.unidadId && v.unidadId === viaje.unidadId) ||
      (viaje.remolqueId && v.remolqueId === viaje.remolqueId) ||
-     (viaje.conductorId && v.conductorId === viaje.conductorId)) &&
-    seEmpalman(v, viaje));
+     (viaje.conductorId && v.conductorId === viaje.conductorId)));
 }
 
 /* =========================================================
@@ -397,8 +420,6 @@ function camposViaje(v = {}) {
   return [
     { k: 'fecha', t: 'Fecha', tipo: 'date', valor: v.fecha || hoyISO(), req: true },
     { k: 'estado', t: 'Estado', tipo: 'select', opciones: DB.catalogos.estadosViaje, valor: v.estado || DB.catalogos.estadosViaje[0], vacio: false },
-    { k: 'horaSalida', t: 'Hora de salida', tipo: 'time', valor: v.horaSalida || '' },
-    { k: 'horaLlegada', t: 'Hora estimada de llegada', tipo: 'time', valor: v.horaLlegada || '' },
     { k: 'origen', t: 'Origen', valor: v.origen || '', ph: 'Ciudad / planta', req: true, lista: lugares() },
     { k: 'destino', t: 'Destino', valor: v.destino || '', ph: 'Ciudad / cliente', req: true, lista: lugares() },
     { k: 'stop', t: 'Stop', valor: v.stop || '', ph: 'Parada intermedia' },
@@ -448,7 +469,6 @@ function guardarViaje(existente) {
   viaje.modificado = new Date().toISOString();
   if (etapas.entregado && !/cancel/i.test(viaje.estado || '')) viaje.estado = 'Entregado';
 
-  const choques = conflictos(viaje);
   const aplicar = () => {
     if (existente) {
       const i = DB.viajes.findIndex(v => v.id === existente.id);
@@ -458,16 +478,6 @@ function guardarViaje(existente) {
     toast(existente ? 'Viaje actualizado.' : 'Viaje agregado al schedule.');
   };
 
-  if (choques.length) {
-    const lista = choques.map(c =>
-      `<li>${esc(c.horaSalida || 's/h')} ${esc(c.origen)} → ${esc(c.destino)} · ${esc(nombreUnidad(c.unidadId) || 'sin unidad')} · ${esc(nombreConductor(c.conductorId) || 'sin conductor')}</li>`).join('');
-    abrirModal('Empalme detectado',
-      `<p>Ese mismo día la unidad o el conductor ya tienen asignado:</p><ul>${lista}</ul>
-       <p class="muted">Puedes guardarlo de todos modos si es intencional.</p>`,
-      [{ texto: 'Regresar', clase: 'ghost', accion: () => editarViaje(existente ? existente.id : null, viaje) },
-       { texto: 'Guardar de todos modos', clase: 'primary', accion: aplicar }]);
-    return;
-  }
   aplicar();
 }
 
@@ -485,11 +495,10 @@ function verViaje(id) {
   const v = DB.viajes.find(x => x.id === id);
   if (!v) return;
   const fila = (t, d) => d ? `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>` : '';
-  const choques = conflictos(v);
+  const repes = repeticionesDelDia(v);
   abrirModal('Detalle del viaje',
     `<div class="detalle"><dl>
       ${fila('Fecha', fechaLarga(v.fecha))}
-      ${fila('Horario', [v.horaSalida, v.horaLlegada].filter(Boolean).join(' → '))}
       <dt>Estado</dt><dd><span class="chip ${claseEstado(v.estado)}">${esc(v.estado || '—')}</span></dd>
       ${fila('Ruta', `${v.origen || '?'} → ${v.destino || '?'}`)}
       ${fila('Cliente', v.cliente)}
@@ -503,8 +512,10 @@ function verViaje(id) {
       ${fila('Tarifa', v.tarifa ? '$' + v.tarifa : '')}
       ${fila('Notas', v.notas)}
       <dt>Avance</dt><dd>${ETAPAS.map(([k, t]) =>
-        `<span class="chip ${etapasDe(v)[k] ? 'ok' : ''}">${etapasDe(v)[k] ? '✓' : '○'} ${esc(t)}</span>`).join(' ')}</dd>
-    </dl>${choques.length ? `<p class="error">⚠ Empalme con ${choques.length} viaje(s) el mismo día.</p>` : ''}</div>`,
+        `<span class="chip ${etapasDe(v)[k] ? 'ok' : ''}" title="${esc(tituloEtapa(v, k, t))}">${etapasDe(v)[k] ? '✓' : '○'} ${esc(t)}</span>`).join(' ')}
+        ${ETAPAS.filter(([k]) => (v.estatusMeta || {})[k]).map(([k, t]) =>
+          `<div class="hint">${esc(t)}: ${esc(v.estatusMeta[k].por)} · ${esc(fechaCorta(v.estatusMeta[k].en.slice(0, 10)))}</div>`).join('')}</dd>
+    </dl>${repes.length ? `<p class="hint">Ese día la misma unidad u operador aparece en ${repes.length} viaje(s) más.</p>` : ''}</div>`,
     [{ texto: 'Cerrar', clase: 'ghost', accion: cerrarModal },
      { texto: 'Editar', clase: 'primary', adminOnly: true, accion: () => editarViaje(id) }]);
 }
@@ -514,6 +525,7 @@ let estadoUI = {
   vista: 'hoja',
   ancla: hoyISO(),
   buscar: '', fEstado: '', fUnidad: '', fConductor: '',
+  abrirCompletados: {},
   ordenUnidades: { col: 'numero', asc: true },
   ordenConductores: { col: 'nombre', asc: true }
 };
@@ -532,9 +544,10 @@ function viajesFiltrados() {
     return true;
   });
 }
+/* Sin hora, el orden dentro del día es el de captura (lo más viejo arriba) */
 const ordenarViajes = arr => arr.slice().sort((a, b) =>
   (a.fecha || '').localeCompare(b.fecha || '') ||
-  (a.horaSalida || '99:99').localeCompare(b.horaSalida || '99:99'));
+  String(a.creado || '').localeCompare(String(b.creado || '')));
 
 function tarjetaViaje(v) {
   const cls = claseEstado(v.estado);
@@ -542,7 +555,6 @@ function tarjetaViaje(v) {
   const op = nombreConductor(v.conductorId);
   return `<div class="viaje ${/cancel/i.test(v.estado || '') ? 'cancelado' : ''}" data-viaje="${v.id}"
       style="--c:${colorViaje(v) || 'var(--brand)'}" title="${esc(v.notas || '')}">
-    <div class="hora">${esc(v.horaSalida || 's/h')}${v.horaLlegada ? ' – ' + esc(v.horaLlegada) : ''}</div>
     <div class="ruta">${esc(v.origen || '?')} → ${esc(v.destino || '?')}</div>
     ${v.cliente ? `<div class="meta"><span class="punto" style="--c:${colorCliente(v.cliente)}"></span>${esc(v.cliente)}</div>` : ''}
     ${op ? `<div class="meta"><span class="punto" style="--c:${colorConductor(v.conductorId)}"></span>${esc(op)}</div>` : ''}
@@ -574,15 +586,14 @@ function renderLeyenda(viajes) {
    editable directamente sobre la tabla
    ========================================================= */
 const COLUMNAS_HOJA = [
-  { t: 'Hora', k: 'horaSalida', ancho: 62 },
-  { t: 'Cliente', k: 'cliente', ancho: 140, color: v => colorCliente(v.cliente) },
-  { t: 'Operador', k: 'conductorId', tipo: 'conductor', ancho: 178 },
-  { t: 'Origen', k: 'origen', ancho: 118 },
-  { t: 'Destino', k: 'destino', ancho: 118 },
+  { t: 'Cliente', k: 'cliente', ancho: 160, color: v => colorCliente(v.cliente) },
+  { t: 'Operador', k: 'conductorId', tipo: 'conductor', ancho: 190 },
+  { t: 'Origen', k: 'origen', ancho: 130 },
+  { t: 'Destino', k: 'destino', ancho: 130 },
   { t: 'Stop', k: 'stop', ancho: 92 },
   { t: 'Tractor', k: 'unidadId', tipo: 'tractor', ancho: 92 },
   { t: 'Remolque', k: 'remolqueId', tipo: 'remolque', ancho: 108 },
-  { t: 'Facturas', k: 'facturas', ancho: 168 }
+  { t: 'Facturas', k: 'facturas', ancho: 190 }
 ];
 
 function celdaSelect(v, col) {
@@ -596,9 +607,10 @@ function celdaSelect(v, col) {
   </select>`;
 }
 
-function filaHoja(v) {
+function filaHoja(v, primeraColumna = null) {
   const editable = sesion.rol === 'admin';
-  const celdas = COLUMNAS_HOJA.map(col => {
+  const celdas = (primeraColumna !== null ? `<td><span class="cel salio">${esc(primeraColumna)}</span></td>` : '') +
+    COLUMNAS_HOJA.map(col => {
     if (col.tipo) return `<td>${celdaSelect(v, col)}</td>`;
     const texto = esc(v[col.k] || '');
     const punto = col.color ? `<span class="punto" style="--c:${col.color(v) || 'transparent'}"></span>` : '';
@@ -607,17 +619,30 @@ function filaHoja(v) {
   }).join('');
   const ticks = ETAPAS.map(([k, t]) => `<td class="col-tick">
     <button class="tick" data-id="${v.id}" data-etapa="${k}" aria-pressed="${!!etapasDe(v)[k]}"
-      title="${t}" aria-label="${t}${etapasDe(v)[k] ? ': hecho' : ': pendiente'}">✓</button></td>`).join('');
+      title="${esc(tituloEtapa(v, k, t))}" aria-label="${t}${etapasDe(v)[k] ? ': hecho' : ': pendiente'}">✓</button></td>`).join('');
   return `<tr class="${/cancel/i.test(v.estado || '') ? 'cancelada' : ''}">${celdas}${ticks}
     <td class="col-acc actions"><button class="btn mini" data-viaje="${v.id}">Ver</button>
     ${editable ? `<button class="btn mini" data-borrar-viaje="${v.id}">✕</button>` : ''}</td></tr>`;
 }
 
+function tablaHoja(viajes) {
+  return `<div class="hoja-wrap"><table class="hoja">
+      <thead><tr>
+        ${COLUMNAS_HOJA.map(c => `<th style="min-width:${c.ancho}px">${esc(c.t)}</th>`).join('')}
+        ${ETAPAS.map(([, t]) => `<th class="col-tick">${esc(t)}</th>`).join('')}
+        <th class="col-acc"></th>
+      </tr></thead>
+      <tbody>${viajes.map(v => filaHoja(v)).join('')}</tbody>
+    </table></div>`;
+}
+
 function bloqueDia(fecha, viajes) {
   const editable = sesion.rol === 'admin';
+  const activos = viajes.filter(v => !estaCompletado(v));
+  const listos = viajes.filter(estaCompletado);
   const cabeza = `<div class="dia-titulo">
       <h3>${esc(fechaEncabezado(fecha))}</h3>
-      <span class="cuenta">${viajes.length} viaje(s)</span>
+      <span class="cuenta">${activos.length} en curso${listos.length ? ` · ${listos.length} completado(s)` : ''}</span>
       ${editable ? `<button class="btn mini" data-nuevo="${fecha}">+ Agregar viaje</button>` : ''}
     </div>`;
   if (!viajes.length) {                       // los días sin viajes no estorban
@@ -626,15 +651,16 @@ function bloqueDia(fecha, viajes) {
          <button class="btn mini" data-nuevo="${fecha}">+ Agregar viaje</button></div>`
       : '';
   }
+  /* Lo completado se baja a su propia sección, plegada, para dejar limpio el día */
+  const completados = listos.length
+    ? `<details class="completados" ${estadoUI.abrirCompletados[fecha] ? 'open' : ''} data-dia-comp="${fecha}">
+         <summary>✓ Completados (${listos.length})</summary>
+         ${tablaHoja(listos)}
+       </details>`
+    : '';
   return `<div class="dia-bloque">${cabeza}
-    <div class="hoja-wrap"><table class="hoja">
-      <thead><tr>
-        ${COLUMNAS_HOJA.map(c => `<th style="min-width:${c.ancho}px">${esc(c.t)}</th>`).join('')}
-        ${ETAPAS.map(([, t]) => `<th class="col-tick">${esc(t)}</th>`).join('')}
-        <th class="col-acc"></th>
-      </tr></thead>
-      <tbody>${viajes.map(filaHoja).join('')}</tbody>
-    </table></div></div>`;
+    ${activos.length ? tablaHoja(activos) : '<div class="dia-vacio"><span>Todo lo de este día está completado.</span></div>'}
+    ${completados}</div>`;
 }
 
 /* Guarda una celda editada. Devuelve true si algo cambió. */
@@ -644,12 +670,7 @@ function editarCampoViaje(id, campo, valor) {
   v[campo] = valor;
   v.modificado = new Date().toISOString();
   guardar();
-  const choques = conflictos(v);
-  if (choques.length && ['unidadId', 'remolqueId', 'conductorId', 'horaSalida'].includes(campo)) {
-    toast(`Guardado, pero ojo: ese día quedan ${choques.length} viaje(s) encimados con la misma unidad, caja u operador.`, 5000);
-  } else {
-    toast('Guardado.', 1200);
-  }
+  toast('Guardado.', 1200);
   return true;
 }
 
@@ -658,22 +679,64 @@ function marcarEtapa(id, etapa, boton) {
   const v = DB.viajes.find(x => x.id === id);
   if (!v) return;
   v.estatus = v.estatus || {};
-  v.estatus[etapa] = !v.estatus[etapa];
+  v.estatusMeta = v.estatusMeta || {};
+  const prendido = !v.estatus[etapa];
+  v.estatus[etapa] = prendido;
+  /* queda constancia de quién marcó y cuándo, por si después hay reclamo */
+  v.estatusMeta[etapa] = prendido
+    ? { por: sesion.nombre || sesion.usuario, en: new Date().toISOString() } : null;
   if (etapa === 'entregado' && !/cancel/i.test(v.estado || '')) {
-    v.estado = v.estatus.entregado ? 'Entregado' : DB.catalogos.estadosViaje[0];
+    v.estado = prendido ? 'Entregado' : DB.catalogos.estadosViaje[0];
   }
   v.modificado = new Date().toISOString();
   guardar();
+  if (etapa === 'entregado') {                 // el viaje se va (o regresa) de los renglones activos
+    estadoUI.abrirCompletados[v.fecha] = prendido || estadoUI.abrirCompletados[v.fecha];
+    renderSchedule();
+    renderPanel();
+    return toast(prendido ? 'Viaje completado: se movió a la sección de completados.' : 'El viaje regresó a los renglones activos.', 3000);
+  }
   const nombre = (ETAPAS.find(e => e[0] === etapa) || [])[1] || etapa;
-  boton.setAttribute('aria-pressed', String(!!v.estatus[etapa]));
-  boton.setAttribute('aria-label', `${nombre}: ${v.estatus[etapa] ? 'hecho' : 'pendiente'}`);
+  boton.setAttribute('aria-pressed', String(prendido));
+  boton.setAttribute('aria-label', `${nombre}: ${prendido ? 'hecho' : 'pendiente'}`);
+  boton.title = tituloEtapa(v, etapa, nombre);
   renderPanel();
+}
+
+/* Texto del globito de cada casilla: qué es, quién la marcó y cuándo */
+function tituloEtapa(v, k, nombre) {
+  const m = (v.estatusMeta || {})[k];
+  return m && m.por ? `${nombre} — marcado por ${m.por} el ${fechaCorta(m.en.slice(0, 10))}` : nombre;
+}
+
+/* Un viaje se da por terminado cuando se marca Entregado */
+const estaCompletado = v => !!etapasDe(v).entregado || /cancel/i.test(v.estado || '');
+
+/* Bloque de arriba: lo que salió antes de esta semana y sigue sin entregarse.
+   Aquí caen los viajes largos (Marion, Houston) que cruzan de semana. */
+function bloquePendientes(datos, desde) {
+  const pend = ordenarViajes(datos.filter(v => v.fecha < desde && !estaCompletado(v)));
+  if (!pend.length) return '';
+  const dias = v => Math.round((fromISO(hoyISO()) - fromISO(v.fecha)) / 86400000);
+  const filas = pend.map(v => filaHoja(v, `${fechaCorta(v.fecha)} · ${dias(v)} día(s)`)).join('');
+  return `<div class="dia-bloque pendientes">
+    <div class="dia-titulo">
+      <h3>Pendientes de días anteriores</h3>
+      <span class="cuenta">${pend.length} viaje(s) sin entregar</span>
+    </div>
+    <div class="hoja-wrap"><table class="hoja">
+      <thead><tr><th style="min-width:120px">Salió</th>
+        ${COLUMNAS_HOJA.map(c => `<th style="min-width:${c.ancho}px">${esc(c.t)}</th>`).join('')}
+        ${ETAPAS.map(([, t]) => `<th class="col-tick">${esc(t)}</th>`).join('')}
+        <th class="col-acc"></th></tr></thead>
+      <tbody>${filas}</tbody>
+    </table></div></div>`;
 }
 
 function renderHoja(datos, cont) {
   const ini = inicioSemana(estadoUI.ancla), fin = addDias(ini, 6);
   $('#periodoLabel').textContent = `Semana del ${fechaCorta(ini)} al ${fechaCorta(fin)}`;
-  let html = '';
+  let html = bloquePendientes(datos, ini);
   for (let i = 0; i < 7; i++) {
     const f = addDias(ini, i);
     html += bloqueDia(f, ordenarViajes(datos.filter(v => v.fecha === f)));
@@ -723,7 +786,7 @@ function renderSchedule() {
       const delDia = ordenarViajes(datos.filter(v => v.fecha === f));
       const items = delDia.slice(0, 3).map(v =>
         `<button class="mes-item" data-viaje="${v.id}" style="--c:${colorViaje(v) || 'var(--line)'}"
-          >${esc(v.horaSalida || '')} ${esc(v.destino || v.origen || 'Viaje')}</button>`).join('');
+          >${esc(v.cliente || v.destino || v.origen || 'Viaje')}</button>`).join('');
       html += `<div class="mes-dia ${fuera ? 'fuera' : ''} ${f === hoy ? 'hoy' : ''}" data-dia="${f}">
         <span class="n">${fd.getDate()}</span>${items}
         ${delDia.length > 3 ? `<span class="mes-mas">+${delDia.length - 3} más</span>` : ''}
@@ -737,8 +800,6 @@ function renderSchedule() {
     cont.innerHTML = `<div class="panel"><div class="tbl-wrap">${tabla(
       [
         { t: 'Fecha', v: v => fechaCorta(v.fecha) },
-        { t: 'Salida', v: v => v.horaSalida || '' },
-        { t: 'Llegada', v: v => v.horaLlegada || '' },
         { t: 'Origen', v: v => esc(v.origen) },
         { t: 'Destino', v: v => esc(v.destino) },
         { t: 'Cliente', v: v => conPunto(colorCliente(v.cliente), v.cliente) },
@@ -803,6 +864,10 @@ function conectarSchedule() {
     const sel = e.target.closest && e.target.closest('select[data-campo]');
     if (sel) editarCampoViaje(sel.dataset.id, sel.dataset.campo, sel.value);
   });
+  cont.addEventListener('toggle', e => {
+    const det = e.target.closest && e.target.closest('[data-dia-comp]');
+    if (det) estadoUI.abrirCompletados[det.dataset.diaComp] = det.open;
+  }, true);
 }
 
 const conPunto = (color, texto) => texto
@@ -934,7 +999,7 @@ function verUnidad(id) {
       ${fila('Notas', u.notas)}
     </dl></div>
     <h3 style="margin-top:14px">Próximos viajes</h3>
-    ${prox.length ? '<ul>' + prox.map(v => `<li>${fechaCorta(v.fecha)} ${esc(v.horaSalida || '')} — ${esc(v.origen)} → ${esc(v.destino)}</li>`).join('') + '</ul>'
+    ${prox.length ? '<ul>' + prox.map(v => `<li>${fechaCorta(v.fecha)} — ${esc(v.origen)} → ${esc(v.destino)}</li>`).join('') + '</ul>'
       : '<p class="muted">Sin viajes programados.</p>'}`,
     [{ texto: 'Cerrar', clase: 'ghost', accion: cerrarModal },
      { texto: 'Editar', clase: 'primary', adminOnly: true, accion: () => editarUnidad(id) }]);
@@ -1130,8 +1195,6 @@ function editarPlantilla(id) {
   }</div></div>`;
   const campos = [
     { k: 'nombre', t: 'Nombre de la plantilla', valor: p.nombre || '', req: true, ph: 'Ej. Ruta diaria Hermosillo–Nogales', ancho: 'full' },
-    { k: 'horaSalida', t: 'Hora de salida', tipo: 'time', valor: p.horaSalida || '' },
-    { k: 'horaLlegada', t: 'Hora de llegada', tipo: 'time', valor: p.horaLlegada || '' },
     { k: 'origen', t: 'Origen', valor: p.origen || '', req: true, lista: lugares() },
     { k: 'destino', t: 'Destino', valor: p.destino || '', req: true, lista: lugares() },
     { k: 'cliente', t: 'Cliente', valor: p.cliente || '', lista: nombresCliente() },
@@ -1167,7 +1230,6 @@ function renderPlantillas() {
   const cols = [
     { t: 'Plantilla', v: p => `<strong>${esc(p.nombre)}</strong>` },
     { t: 'Días', v: p => esc((p.dias || []).map(i => DIAS_CORTO[i]).join(', ')) },
-    { t: 'Horario', v: p => esc([p.horaSalida, p.horaLlegada].filter(Boolean).join(' – ')) },
     { t: 'Ruta', v: p => esc(`${p.origen || '?'} → ${p.destino || '?'}`) },
     { t: 'Cliente', v: p => esc(p.cliente) },
     { t: 'Unidad', v: p => esc(nombreUnidad(p.unidadId)) },
@@ -1213,11 +1275,10 @@ function dialogoGenerar(plantillaId = '') {
          const dow = dowLunes(f);
          plantillas.forEach(p => {
            if (!(p.dias || []).map(String).includes(String(dow))) return;
-           const yaExiste = DB.viajes.some(v => v.plantillaId === p.id && v.fecha === f && (v.horaSalida || '') === (p.horaSalida || ''));
+           const yaExiste = DB.viajes.some(v => v.plantillaId === p.id && v.fecha === f);
            if (yaExiste) { omitidos++; return; }
            DB.viajes.push({
              id: uid(), plantillaId: p.id, fecha: f,
-             horaSalida: p.horaSalida || '', horaLlegada: p.horaLlegada || '',
              origen: p.origen || '', destino: p.destino || '', cliente: p.cliente || '',
              unidadId: p.unidadId || '', remolqueId: p.remolqueId || '', conductorId: p.conductorId || '',
              carga: p.carga || '', tarifa: p.tarifa || '', notas: p.notas || '',
@@ -1383,7 +1444,6 @@ function vistaPrevia(viajes, titulo, subtitulo = '') {
       if (!v.conductorId) faltan.push('operador');
       return `<tr>
         <td>${esc(fechaCorta(v.fecha))}</td>
-        <td>${esc(v.horaSalida || '')}</td>
         <td>${esc(v.origen || '—')} → ${esc(v.destino || '—')}</td>
         <td>${v.cliente ? conPunto(colorCliente(v.cliente), v.cliente) : '—'}</td>
         <td>${esc(nombreUnidad(v.unidadId) || '—')}</td>
@@ -1395,7 +1455,7 @@ function vistaPrevia(viajes, titulo, subtitulo = '') {
     }).join('');
     $('#modalBody').innerHTML = `${subtitulo ? `<p class="muted">${esc(subtitulo)}</p>` : ''}
       <div class="previo tbl-wrap"><table>
-        <thead><tr><th>Fecha</th><th>Hora</th><th>Ruta</th><th>Cliente</th><th>Tractor</th><th>Operador</th><th>Revisar</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Ruta</th><th>Cliente</th><th>Tractor</th><th>Operador</th><th>Revisar</th><th></th></tr></thead>
         <tbody>${filas}</tbody></table></div>
       <p class="hint">Lo que falte se puede completar aquí o después, desde el schedule.</p>`;
     $('#modalFoot').firstChild && ($('#modalFoot').lastChild.textContent = `Agregar ${previoLista.length} viaje(s)`);
@@ -1694,6 +1754,7 @@ function renderPanel() {
   $('#kpis').innerHTML = [
     ['Viajes hoy', DB.viajes.filter(v => v.fecha === hoy && activo(v)).length],
     ['Viajes esta semana', enSemana.filter(activo).length],
+    ['Pendientes de días pasados', DB.viajes.filter(v => v.fecha < hoy && !estaCompletado(v)).length],
     ['Tractores', DB.unidades.filter(u => !esRemolque(u)).length],
     ['Remolques', DB.unidades.filter(esRemolque).length],
     ['Unidades disponibles', disponibles],
@@ -1706,7 +1767,6 @@ function renderPanel() {
   $('#panelHoy').innerHTML = prox.length
     ? `<div class="tbl-wrap">${tabla([
         { t: 'Día', v: v => v.fecha === hoy ? 'Hoy' : 'Mañana' },
-        { t: 'Hora', v: v => esc(v.horaSalida || '') },
         { t: 'Ruta', v: v => esc(`${v.origen || '?'} → ${v.destino || '?'}`) },
         { t: 'Unidad', v: v => esc(nombreUnidad(v.unidadId)) },
         { t: 'Operador', v: v => conPunto(colorConductor(v.conductorId), nombreConductor(v.conductorId)) },
@@ -1748,15 +1808,6 @@ function renderPanel() {
       else if (d <= 30) avisos.push(['warn', `${c.nombre}: ${et} vence en ${d} día(s).`]);
     });
   });
-  const vistos = new Set();
-  DB.viajes.filter(v => v.fecha >= hoy && v.fecha <= addDias(hoy, 14)).forEach(v => {
-    conflictos(v).forEach(c => {
-      const clave = [v.id, c.id].sort().join('|');
-      if (vistos.has(clave)) return;
-      vistos.add(clave);
-      avisos.push(['warn', `Empalme el ${fechaCorta(v.fecha)}: ${v.origen}→${v.destino} y ${c.origen}→${c.destino} comparten unidad o conductor.`]);
-    });
-  });
   DB.viajes.filter(v => v.fecha >= hoy && v.fecha <= addDias(hoy, 7) && !/cancel/i.test(v.estado || ''))
     .forEach(v => {
       if (!v.unidadId || !v.conductorId)
@@ -1767,6 +1818,95 @@ function renderPanel() {
     ? '<ul>' + avisos.slice(0, 40).map(([c, t]) => `<li><span class="chip ${c}">${c === 'bad' ? 'Vencido' : 'Atención'}</span> ${esc(t)}</li>`).join('') + '</ul>'
       + (avisos.length > 40 ? `<p class="hint">y ${avisos.length - 40} aviso(s) más…</p>` : '')
     : '<p class="muted">Todo en orden: sin vencimientos próximos ni empalmes.</p>';
+}
+
+/* =========================================================
+   USUARIOS — alta, permisos y contraseñas
+   ========================================================= */
+function renderUsuarios() {
+  const cont = $('#tablaUsuarios');
+  if (!cont) return;
+  const cols = [
+    { t: 'Usuario', v: u => `<strong>${esc(u.usuario)}</strong>${u.id === sesion.id ? ' <span class="chip info">tú</span>' : ''}` },
+    { t: 'Nombre', v: u => esc(u.nombre) },
+    { t: 'Permiso', v: u => `<span class="chip ${u.rol === 'admin' ? 'ok' : ''}">${esc(ROLES[u.rol] || u.rol)}</span>` },
+    { t: 'Nota', v: u => esc(u.notaClave || '') }
+  ];
+  cont.innerHTML = `<div class="tbl-wrap">${tabla(cols, DB.usuarios,
+    u => `<button class="btn mini" data-editar-usuario="${u.id}">Editar</button>
+          <button class="btn mini" data-clave-usuario="${u.id}">Cambiar clave</button>
+          ${u.id === sesion.id ? '' : `<button class="btn mini" data-borrar-usuario="${u.id}">✕</button>`}`,
+    'No hay usuarios.')}</div>`;
+  cont.onclick = e => {
+    const ed = e.target.closest('[data-editar-usuario]');
+    if (ed) return editarUsuario(ed.dataset.editarUsuario);
+    const cl = e.target.closest('[data-clave-usuario]');
+    if (cl) return dialogoClave(cl.dataset.claveUsuario);
+    const bo = e.target.closest('[data-borrar-usuario]');
+    if (bo) return borrarUsuario(bo.dataset.borrarUsuario);
+  };
+}
+
+function editarUsuario(id) {
+  if (sesion.rol !== 'admin') return;
+  const ex = id ? DB.usuarios.find(u => u.id === id) : null;
+  const u = ex || {};
+  const campos = [
+    { k: 'usuario', t: 'Usuario (con el que entra)', valor: u.usuario || '', req: true, ph: 'sin espacios' },
+    { k: 'nombre', t: 'Nombre de la persona', valor: u.nombre || '', ancho: 'full' },
+    { k: 'rol', t: 'Permiso', tipo: 'select', vacio: false, valor: u.rol || 'consulta',
+      opciones: Object.entries(ROLES).map(([v, t]) => ({ v, t })) },
+    ...(ex ? [] : [{ k: 'clave', t: 'Contraseña', valor: '', req: true, ph: 'mínimo 4 caracteres' }])
+  ];
+  abrirModal(ex ? `Usuario ${ex.usuario}` : 'Nuevo usuario', formHTML(campos), [
+    { texto: 'Cancelar', clase: 'ghost', accion: cerrarModal },
+    { texto: 'Guardar', clase: 'primary', accion: async () => {
+      const d = leerForm();
+      const usuario = String(d.usuario || '').trim().toLowerCase().replace(/\s+/g, '');
+      if (!usuario) return toast('El usuario no puede quedar vacío.');
+      const repetido = DB.usuarios.find(x => x.usuario.toLowerCase() === usuario && x.id !== (ex && ex.id));
+      if (repetido) return toast('Ya existe otro usuario con ese nombre de acceso.');
+      if (ex) {
+        if (ex.rol === 'admin' && d.rol !== 'admin' && cuantosAdmin() === 1)
+          return toast('Debe quedar al menos una persona con permiso de editar.');
+        Object.assign(ex, { usuario, nombre: d.nombre || usuario, rol: d.rol });
+        if (ex.id === sesion.id) sesion = Object.assign({}, sesion, { usuario, nombre: ex.nombre, rol: ex.rol });
+      } else {
+        if ((d.clave || '').length < 4) return toast('La contraseña debe tener al menos 4 caracteres.');
+        DB.usuarios.push(await crearUsuario({ usuario, nombre: d.nombre || usuario, rol: d.rol, clave: d.clave }));
+      }
+      guardar(); cerrarModal(); render();
+      toast(ex ? 'Usuario actualizado.' : 'Usuario creado.');
+    } }
+  ]);
+}
+
+function dialogoClave(id) {
+  if (sesion.rol !== 'admin') return;
+  const u = DB.usuarios.find(x => x.id === id);
+  if (!u) return;
+  abrirModal(`Cambiar la contraseña de ${u.usuario}`,
+    formHTML([{ k: 'clave', t: 'Nueva contraseña', valor: '', req: true, ancho: 'full', ph: 'mínimo 4 caracteres' }]) +
+    '<p class="hint">Anótala y pásasela a esa persona: las contraseñas se guardan cifradas y no se pueden volver a ver.</p>',
+    [{ texto: 'Cancelar', clase: 'ghost', accion: cerrarModal },
+     { texto: 'Cambiar', clase: 'primary', accion: async () => {
+       const clave = leerForm().clave || '';
+       if (clave.length < 4) return toast('La contraseña debe tener al menos 4 caracteres.');
+       await cambiarClave(u, clave);
+       guardar(); cerrarModal(); render();
+       toast(`Contraseña de ${u.usuario} actualizada.`);
+     } }]);
+}
+
+function borrarUsuario(id) {
+  if (sesion.rol !== 'admin') return;
+  const u = DB.usuarios.find(x => x.id === id);
+  if (!u || u.id === sesion.id) return;
+  if (u.rol === 'admin' && cuantosAdmin() === 1) return toast('Debe quedar al menos una persona con permiso de editar.');
+  confirmar('Quitar usuario', `¿Quitar a ${u.usuario}? Ya no podrá entrar a la página.`, () => {
+    DB.usuarios = DB.usuarios.filter(x => x.id !== id);
+    guardar(); cerrarModal(); render(); toast('Usuario eliminado.');
+  }, 'Quitar');
 }
 
 /* =========================================================
@@ -1793,8 +1933,7 @@ const COLS_CONDUCTOR = [
   { titulo: 'notas', valor: c => c.notas }
 ];
 const COLS_VIAJE = [
-  { titulo: 'fecha', valor: v => v.fecha }, { titulo: 'horaSalida', valor: v => v.horaSalida },
-  { titulo: 'horaLlegada', valor: v => v.horaLlegada }, { titulo: 'origen', valor: v => v.origen },
+  { titulo: 'fecha', valor: v => v.fecha }, { titulo: 'origen', valor: v => v.origen },
   { titulo: 'destino', valor: v => v.destino }, { titulo: 'cliente', valor: v => v.cliente },
   { titulo: 'stop', valor: v => v.stop },
   { titulo: 'facturas', valor: v => v.facturas || v.referencia }, { titulo: 'tractor', valor: v => nombreUnidad(v.unidadId) },
@@ -1998,7 +2137,8 @@ function render() {
     DB.empresa.caat ? 'CAAT ' + DB.empresa.caat : '',
     DB.empresa.scac ? 'SCAC ' + DB.empresa.scac : ''
   ].filter(Boolean).join(' · ') || 'Panel de control';
-  $('#roleBadge').textContent = sesion.rol === 'admin' ? 'Administrador' : ('Consulta' + (sesion.nombre ? ' · ' + sesion.nombre : ''));
+  $('#roleBadge').textContent = (sesion.nombre || sesion.usuario || 'Consulta') +
+    (sesion.rol === 'admin' ? '' : ' · solo consulta');
   $('#roleBadge').className = 'badge' + (sesion.rol === 'admin' ? ' admin' : '');
 
   llenarSelect($('#filtroEstado'), DB.catalogos.estadosViaje, 'Todos los estados');
@@ -2017,6 +2157,7 @@ function render() {
   renderConductores();
   renderClientes();
   renderPlantillas();
+  renderUsuarios();
 
   $('#cfgEmpresa').value = DB.empresa.nombre || '';
   $('#cfgDispatch').value = DB.empresa.dispatch || '';
@@ -2041,47 +2182,34 @@ function irA(vista) {
 }
 
 /* ---------------- Sesión ---------------- */
-function entrarComo(rol, nombre = '') {
-  sesion = { rol, nombre };
+function entrarComo(u) {
+  sesion = { id: u.id, usuario: u.usuario, nombre: u.nombre || u.usuario, rol: u.rol };
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
   render();
   irA('panel');
 }
 function salir() {
-  sesion = { rol: 'guest', nombre: '' };
+  sesion = { rol: 'consulta', nombre: '', usuario: '', id: '' };
   $('#app').classList.add('hidden');
   $('#login').classList.remove('hidden');
   $('#loginPass').value = '';
+  $('#loginUsuario').value = '';
   $('#loginError').classList.add('hidden');
 }
 
 /* ---------------- Eventos ---------------- */
 function conectarEventos() {
-  /* Login */
-  let modoLogin = 'admin';
-  $$('.ltab').forEach(b => b.onclick = () => {
-    modoLogin = b.dataset.mode;
-    $$('.ltab').forEach(x => x.classList.toggle('active', x === b));
-    $('#adminFields').classList.toggle('hidden', modoLogin !== 'admin');
-    $('#guestFields').classList.toggle('hidden', modoLogin !== 'guest');
-    $('#loginError').classList.add('hidden');
-  });
-
+  /* Login con usuario y contraseña */
   $('#loginForm').onsubmit = async e => {
     e.preventDefault();
     const err = $('#loginError');
-    if (modoLogin === 'guest') return entrarComo('guest', $('#guestName').value.trim());
-    const pass = $('#loginPass').value;
-    if (!DB.auth.configurada) {
-      if (pass.length < 4) { err.textContent = 'Elige una contraseña de al menos 4 caracteres.'; return err.classList.remove('hidden'); }
-      await definirPass(pass);
-      guardar();
-      toast('Contraseña de administrador creada. Guárdala bien.');
-      return entrarComo('admin');
+    const u = buscarUsuario($('#loginUsuario').value);
+    if (await claveCorrecta(u, $('#loginPass').value)) {
+      err.classList.add('hidden');
+      return entrarComo(u);
     }
-    if (await verificarPass(pass)) { err.classList.add('hidden'); return entrarComo('admin'); }
-    err.textContent = 'Contraseña incorrecta.';
+    err.textContent = 'Usuario o contraseña incorrectos.';
     err.classList.remove('hidden');
   };
 
@@ -2172,6 +2300,7 @@ function conectarEventos() {
     guardar(); render(); toast('Datos de la compañía guardados.');
   };
   $('#cargarAxlBtn').onclick = () => cargarInventarioAXL();
+  $('#nuevoUsuarioBtn').onclick = () => editarUsuario(null);
 
   /* Llave de la API para leer fotos */
   const pintarEstadoIa = () => {
@@ -2221,12 +2350,13 @@ function conectarEventos() {
   };
   $('#passForm').onsubmit = async e => {
     e.preventDefault();
+    const yo = DB.usuarios.find(x => x.id === sesion.id);
     const act = $('#passActual').value, n1 = $('#passNueva').value, n2 = $('#passNueva2').value;
-    if (DB.auth.configurada && !(await verificarPass(act))) return toast('La contraseña actual no es correcta.');
+    if (!(await claveCorrecta(yo, act))) return toast('La contraseña actual no es correcta.');
     if (n1.length < 4) return toast('La nueva contraseña debe tener al menos 4 caracteres.');
     if (n1 !== n2) return toast('Las contraseñas nuevas no coinciden.');
-    await definirPass(n1); guardar();
-    $('#passForm').reset(); toast('Contraseña actualizada.');
+    await cambiarClave(yo, n1); guardar(); render();
+    $('#passForm').reset(); toast('Tu contraseña quedó actualizada.');
   };
   $('#catalogosForm').onsubmit = e => {
     e.preventDefault();
@@ -2289,17 +2419,16 @@ function dialogoImportar(tipo) {
 }
 
 /* ---------------- Arranque ---------------- */
-function iniciar() {
+async function iniciar() {
   const tema = localStorage.getItem('axl_tema');
   if (tema) document.documentElement.dataset.theme = tema;   // si no, manda el tema del sistema
   cargar();
   /* La primera vez que se abre, se carga el inventario propio de AXL */
   if (!DB.unidades.length && !DB.conductores.length && !DB.clientes.length) cargarInventarioAXL(true);
+  await sembrarUsuarios();
   conectarEventos();
   $('#loginEmpresa').textContent = DB.empresa.nombre || 'Control de Schedule y Flota';
-  $('#firstRunHint').textContent = DB.auth.configurada
-    ? ''
-    : 'Es la primera vez que se abre en este navegador: la contraseña que escribas quedará guardada como la del administrador.';
-  if (!DB.auth.configurada) $('#loginPass').placeholder = 'Crea tu contraseña de administrador';
+  $('#firstRunHint').textContent = 'Cada persona entra con su propio usuario. Si no recuerdas el tuyo, ' +
+    'quien tiene permiso de editar puede verlo y cambiar tu contraseña en Datos y Ajustes.';
 }
 document.addEventListener('DOMContentLoaded', iniciar);
