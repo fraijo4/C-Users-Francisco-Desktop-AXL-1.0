@@ -136,6 +136,7 @@ const EMPRESA_DEF = { nombre: 'AXL Transport', dispatch: '', contacto: '', caat:
 
 const ESTADO_INICIAL = () => ({
   version: 2,
+  migraciones: {},
   empresa: Object.assign({}, EMPRESA_DEF),
   auth: { hash: '', salt: '', configurada: false },
   usuarios: [],
@@ -191,7 +192,7 @@ function guardar() {
 /* Cinco cuentas de arranque: dos que editan y tres de consulta.
    Todas se pueden renombrar, cambiar de permiso o borrar desde Ajustes. */
 const USUARIOS_DEF = [
-  { usuario: 'francisco', nombre: 'Francisco — dueño y dispatch', rol: 'admin', clave: 'AXL-dueno-2026' },
+  { usuario: 'admin', nombre: 'Francisco — dueño y dispatch', rol: 'admin', clave: 'admin' },
   { usuario: 'oficina', nombre: 'Oficina — segundo dispatch', rol: 'admin', clave: 'AXL-oficina-2026' },
   { usuario: 'consulta1', nombre: 'Consulta 1', rol: 'consulta', clave: 'AXL-ver1-2026' },
   { usuario: 'consulta2', nombre: 'Consulta 2', rol: 'consulta', clave: 'AXL-ver2-2026' },
@@ -213,6 +214,21 @@ function sembrarFormatos() {
   if (Array.isArray(DB.formatos) && DB.formatos.length) return;
   DB.formatos = FORMATOS_DEF.map(f => Object.assign({ id: uid() }, f));
   guardar();
+}
+
+/* La cuenta principal se llamaba "francisco": se pasa a admin/admin una sola vez,
+   tal como lo pidió el dueño. Si después la vuelve a cambiar, esto ya no se repite. */
+async function migrarCuentaPrincipal() {
+  DB.migraciones = DB.migraciones || {};
+  if (DB.migraciones.cuentaAdmin) return false;
+  const u = buscarUsuario('francisco');
+  if (u && !buscarUsuario('admin')) {
+    u.usuario = 'admin';
+    await cambiarClave(u, 'admin');
+  }
+  DB.migraciones.cuentaAdmin = true;
+  guardar();
+  return true;
 }
 
 async function sembrarUsuarios() {
@@ -2701,6 +2717,7 @@ async function iniciar() {
   if (!DB.unidades.length && !DB.conductores.length && !DB.clientes.length) cargarInventarioAXL(true);
   sembrarFormatos();
   await sembrarUsuarios();
+  await migrarCuentaPrincipal();
   conectarEventos();
   $('#loginEmpresa').textContent = DB.empresa.nombre || 'Control de Schedule y Flota';
   $('#firstRunHint').textContent = 'Cada persona entra con su propio usuario. Si no recuerdas el tuyo, ' +

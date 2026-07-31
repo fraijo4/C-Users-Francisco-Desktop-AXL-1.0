@@ -30,8 +30,8 @@ Cada persona entra con **su propio usuario y contraseña**. Hay dos permisos:
 - **Solo consulta** — ve la página completa (schedule, inventario, disponibilidad,
   directorio) pero no puede cambiar absolutamente nada, ni marcar casillas.
 
-Vienen cinco cuentas creadas de fábrica: dos que editan y tres de consulta. **Cámbiales la
-contraseña en cuanto entres** — se hace en *Datos y Ajustes → Usuarios → Cambiar clave*.
+Vienen cinco cuentas creadas de fábrica: dos que editan (`admin` y `oficina`) y tres de
+consulta (`consulta1`, `consulta2`, `consulta3`). **Cámbiales la contraseña en cuanto entres** — se hace en *Datos y Ajustes → Usuarios → Cambiar clave*.
 Desde ahí también se dan de alta más personas, se les cambia el permiso o se les quita el acceso.
 
 Las contraseñas se guardan **cifradas**: nadie, ni tú, puede volver a verlas. Si a alguien se
