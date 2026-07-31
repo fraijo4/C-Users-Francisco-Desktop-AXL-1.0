@@ -109,9 +109,16 @@
         <select id="filtroUnidad"><option value="">Todas las unidades</option></select>
         <select id="filtroConductor"><option value="">Todos los conductores</option></select>
         <button class="btn admin-only" id="generarPlantillaBtn">Generar desde plantilla</button>
-        <button class="btn primary admin-only" id="nuevoViajeBtn">+ Nuevo viaje</button>
         <button class="btn ghost" id="exportViajesBtn">Exportar CSV</button>
       </div>
+      <div class="captura admin-only">
+        <input type="text" id="capturaRapida" placeholder="Escribe un viaje y presiona Enter — ej: mañana 6am T-14 Ontario a Phoenix, NPT Houston">
+        <button class="btn" id="capturaBtn">Agregar</button>
+        <button class="btn" id="pegarTextoBtn">Pegar lista</button>
+        <button class="btn primary" id="leerFotoBtn">📷 Leer foto con IA</button>
+        <button class="btn" id="nuevoViajeBtn">Formulario completo</button>
+      </div>
+      <div id="leyendaColores"></div>
       <div id="scheduleBody"></div>
     </section>
 
@@ -196,6 +203,20 @@
           </form>
         </div>
         <div class="panel admin-only">
+          <h2>Leer fotos y capturas con IA</h2>
+          <p class="muted">Para que la página lea un schedule desde una foto o screenshot necesita una llave de la API de Claude (platform.claude.com → API keys). La llave se guarda <b>solo en este navegador</b> y no se incluye en los respaldos.</p>
+          <form id="iaForm" class="form">
+            <label>Llave de API<input type="password" id="cfgApiKey" placeholder="sk-ant-..." autocomplete="off"></label>
+            <div class="row">
+              <button class="btn primary" type="submit">Guardar llave</button>
+              <button class="btn" type="button" id="probarIaBtn">Probar conexión</button>
+              <button class="btn ghost" type="button" id="borrarIaBtn">Borrar llave</button>
+            </div>
+          </form>
+          <p class="hint" id="estadoIa"></p>
+          <p class="hint">Aviso: la lectura de fotos se cobra a tu cuenta de Claude por cada imagen. Si abres la página desde la liga de claude.ai, el navegador bloquea esta conexión por seguridad; usa la versión que abres desde tu computadora o GitHub Pages.</p>
+        </div>
+        <div class="panel admin-only">
           <h2>Inventario de AXL</h2>
           <p class="muted">Vuelve a cargar los tractores, remolques, operadores y clientes que ya están capturados. Lo que ya existe se actualiza; nada se duplica y no se borra lo que hayas agregado.</p>
           <button class="btn" id="cargarAxlBtn">Cargar inventario de AXL</button>
@@ -252,6 +273,7 @@
 
 <div id="toast" class="toast hidden"></div>
 <input type="file" id="filePicker" class="hidden">
+<input type="file" id="imgPicker" class="hidden" accept="image/*">
 
 <script src="datos-axl.js"></script>
 <script src="app.js"></script>

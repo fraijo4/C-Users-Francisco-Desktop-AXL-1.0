@@ -159,6 +159,7 @@ function cargar() {
   }
 }
 function guardar() {
+  asignarColores();
   DB.actualizado = new Date().toISOString();
   try {
     localStorage.setItem(CLAVE, JSON.stringify(DB));
@@ -197,6 +198,44 @@ const unidad = id => DB.unidades.find(u => u.id === id);
 const conductor = id => DB.conductores.find(c => c.id === id);
 const nombreUnidad = id => { const u = unidad(id); return u ? (u.numero || u.placa || 'Unidad') : ''; };
 const nombreConductor = id => { const c = conductor(id); return c ? c.nombre : ''; };
+
+/* ---------------- Colores por cliente y por operador ---------------- */
+/* Paleta elegida para que se distinga en modo claro y oscuro */
+const PALETA = ['#2563eb', '#0d9488', '#7c3aed', '#db2777', '#ea580c', '#16a34a',
+  '#0891b2', '#ca8a04', '#dc2626', '#4f46e5', '#65a30d', '#9333ea',
+  '#0ea5e9', '#e11d48', '#059669', '#d97706'];
+
+function colorAuto(texto) {                   // color estable aunque no esté en el directorio
+  let h = 0;
+  const s = String(texto || '');
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return PALETA[h % PALETA.length];
+}
+/* asigna colores libres a quien no tenga */
+function asignarColores() {
+  const usados = c => new Set(c.map(x => x.color).filter(Boolean));
+  [DB.clientes, DB.conductores].forEach(lista => {
+    const ya = usados(lista);
+    lista.forEach(x => {
+      if (x.color) return;
+      x.color = PALETA.find(c => !ya.has(c)) || colorAuto(x.nombre || x.id);
+      ya.add(x.color);
+    });
+  });
+}
+function colorCliente(nombre) {
+  if (!nombre) return '';
+  const c = DB.clientes.find(x => String(x.nombre).toLowerCase() === String(nombre).toLowerCase());
+  return (c && c.color) || colorAuto(nombre);
+}
+const colorConductor = id => { const c = conductor(id); return (c && c.color) || (c ? colorAuto(c.nombre) : ''); };
+/* el tractor toma el color de su operador asignado */
+function colorUnidad(id) {
+  const c = DB.conductores.find(x => x.unidadId === id);
+  return c ? (c.color || colorAuto(c.nombre)) : '';
+}
+/* color con el que se pinta un viaje: el del cliente, o el del operador si no hay cliente */
+const colorViaje = v => colorCliente(v.cliente) || colorConductor(v.conductorId) || '';
 
 /* clase de color según estado */
 function claseEstado(e) {
@@ -262,6 +301,10 @@ function campo(c) {
       return `<option value="${esc(v)}" ${String(val) === String(v) ? 'selected' : ''}>${esc(t)}</option>`;
     }).join('');
     control = `<select id="${id}" name="${c.k}">${c.vacio !== false ? `<option value="">${esc(c.vacio || '— ninguno —')}</option>` : ''}${ops}</select>`;
+  } else if (c.tipo === 'color') {
+    control = `<div class="swatches">${PALETA.map((col, i) =>
+      `<label title="${esc(col)}"><input type="radio" name="${c.k}" value="${col}"
+        ${(val || PALETA[0]) === col ? 'checked' : ''}><span class="muestra" style="--c:${col}"></span></label>`).join('')}</div>`;
   } else if (c.tipo === 'textarea') {
     control = `<textarea id="${id}" name="${c.k}" placeholder="${esc(c.ph || '')}">${esc(val)}</textarea>`;
   } else {
@@ -283,6 +326,8 @@ function leerForm() {
     if (el.type === 'checkbox') {
       if (!Array.isArray(datos[el.name])) datos[el.name] = [];
       if (el.checked) datos[el.name].push(el.value);
+    } else if (el.type === 'radio') {
+      if (el.checked) datos[el.name] = el.value;
     } else datos[el.name] = el.value.trim();
   });
   return datos;
@@ -460,14 +505,32 @@ const ordenarViajes = arr => arr.slice().sort((a, b) =>
 
 function tarjetaViaje(v) {
   const cls = claseEstado(v.estado);
-  const meta = [nombreUnidad(v.unidadId), nombreUnidad(v.remolqueId), nombreConductor(v.conductorId)]
-    .filter(Boolean).join(' · ');
-  return `<div class="viaje e-${cls}" data-viaje="${v.id}" title="${esc(v.notas || '')}">
+  const equipo = [nombreUnidad(v.unidadId), nombreUnidad(v.remolqueId)].filter(Boolean).join(' · ');
+  const op = nombreConductor(v.conductorId);
+  return `<div class="viaje ${/cancel/i.test(v.estado || '') ? 'cancelado' : ''}" data-viaje="${v.id}"
+      style="--c:${colorViaje(v) || 'var(--brand)'}" title="${esc(v.notas || '')}">
     <div class="hora">${esc(v.horaSalida || 's/h')}${v.horaLlegada ? ' – ' + esc(v.horaLlegada) : ''}</div>
     <div class="ruta">${esc(v.origen || '?')} → ${esc(v.destino || '?')}</div>
-    ${v.cliente ? `<div class="meta">${esc(v.cliente)}</div>` : ''}
-    ${meta ? `<div class="meta">${esc(meta)}</div>` : ''}
+    ${v.cliente ? `<div class="meta"><span class="punto" style="--c:${colorCliente(v.cliente)}"></span>${esc(v.cliente)}</div>` : ''}
+    ${op ? `<div class="meta"><span class="punto" style="--c:${colorConductor(v.conductorId)}"></span>${esc(op)}</div>` : ''}
+    ${equipo ? `<div class="meta">${esc(equipo)}</div>` : ''}
     <div class="meta"><span class="chip ${cls}">${esc(v.estado || 'Programado')}</span></div>
+  </div>`;
+}
+
+/* Leyenda: los colores que aparecen en el periodo que se está viendo */
+function renderLeyenda(viajes) {
+  const cont = $('#leyendaColores');
+  const clientes = [...new Set(viajes.map(v => v.cliente).filter(Boolean))].sort();
+  const operadores = [...new Set(viajes.map(v => v.conductorId).filter(Boolean))]
+    .map(id => ({ id, nombre: nombreConductor(id), unidad: nombreUnidad((conductor(id) || {}).unidadId) }))
+    .filter(o => o.nombre).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  if (!clientes.length && !operadores.length) { cont.innerHTML = ''; return; }
+  const item = (color, texto) => `<span class="item"><span class="punto" style="--c:${color}"></span>${esc(texto)}</span>`;
+  cont.innerHTML = `<div class="leyenda">
+    ${clientes.length ? `<b>Clientes</b>${clientes.map(c => item(colorCliente(c), c)).join('')}` : ''}
+    ${operadores.length ? `<b>Operadores</b>${operadores.map(o =>
+      item(o.color || colorConductor(o.id), o.nombre + (o.unidad ? ` · ${o.unidad}` : ''))).join('')}` : ''}
   </div>`;
 }
 
@@ -476,6 +539,7 @@ function renderSchedule() {
   const cont = $('#scheduleBody');
   const datos = viajesFiltrados();
   const hoy = hoyISO();
+  renderLeyenda(datos);
 
   if (estadoUI.vista === 'semana') {
     const ini = inicioSemana(estadoUI.ancla);
@@ -508,7 +572,8 @@ function renderSchedule() {
       if (i >= 35 && fuera) continue;
       const delDia = ordenarViajes(datos.filter(v => v.fecha === f));
       const items = delDia.slice(0, 3).map(v =>
-        `<button class="mes-item" data-viaje="${v.id}">${esc(v.horaSalida || '')} ${esc(v.destino || v.origen || 'Viaje')}</button>`).join('');
+        `<button class="mes-item" data-viaje="${v.id}" style="--c:${colorViaje(v) || 'var(--line)'}"
+          >${esc(v.horaSalida || '')} ${esc(v.destino || v.origen || 'Viaje')}</button>`).join('');
       html += `<div class="mes-dia ${fuera ? 'fuera' : ''} ${f === hoy ? 'hoy' : ''}" data-dia="${f}">
         <span class="n">${fd.getDate()}</span>${items}
         ${delDia.length > 3 ? `<span class="mes-mas">+${delDia.length - 3} más</span>` : ''}
@@ -526,10 +591,10 @@ function renderSchedule() {
         { t: 'Llegada', v: v => v.horaLlegada || '' },
         { t: 'Origen', v: v => esc(v.origen) },
         { t: 'Destino', v: v => esc(v.destino) },
-        { t: 'Cliente', v: v => esc(v.cliente) },
+        { t: 'Cliente', v: v => conPunto(colorCliente(v.cliente), v.cliente) },
         { t: 'Tractor', v: v => esc(nombreUnidad(v.unidadId)) },
         { t: 'Remolque', v: v => esc(nombreUnidad(v.remolqueId)) },
-        { t: 'Operador', v: v => esc(nombreConductor(v.conductorId)) },
+        { t: 'Operador', v: v => conPunto(colorConductor(v.conductorId), nombreConductor(v.conductorId)) },
         { t: 'Estado', v: v => `<span class="chip ${claseEstado(v.estado)}">${esc(v.estado || '')}</span>` }
       ], lista, v => `<button class="btn mini" data-viaje="${v.id}">Ver</button>` +
         (sesion.rol === 'admin' ? ` <button class="btn mini admin-only" data-editar-viaje="${v.id}">Editar</button>` : ''),
@@ -548,6 +613,10 @@ function renderSchedule() {
     if (dia && sesion.rol === 'admin') return editarViaje(null, { fecha: dia.dataset.dia });
   };
 }
+
+const conPunto = (color, texto) => texto
+  ? `<span style="display:inline-flex;align-items:center;gap:6px"><span class="punto" style="--c:${color}"></span>${esc(texto)}</span>`
+  : '';
 
 function tabla(cols, filas, accionesFn, vacio = 'Sin registros.') {
   if (!filas.length) return `<div class="empty">${esc(vacio)}</div>`;
@@ -636,7 +705,7 @@ function renderInventario() {
     { t: 'Placas MX', v: u => esc(u.placaMx) },
     { t: 'Marca / modelo', v: u => esc([u.marca, u.modelo, u.anio].filter(Boolean).join(' ')) },
     { t: 'VIN', v: u => esc(u.vin) },
-    { t: 'Operador', v: u => esc((DB.conductores.find(c => c.unidadId === u.id) || {}).nombre || '') },
+    { t: 'Operador', v: u => conPunto(colorUnidad(u.id), (DB.conductores.find(c => c.unidadId === u.id) || {}).nombre || '') },
     { t: 'Seguro', v: u => vence(u.seguro) },
     { t: 'Servicio', v: u => vence(u.proxServicio) },
     { t: 'Estado', v: u => `<span class="chip ${claseEstado(u.estado)}">${esc(u.estado || '')}</span>` }
@@ -694,6 +763,7 @@ function camposConductor(c = {}) {
     { k: 'venceMedico', t: 'Vence examen médico', tipo: 'date', valor: c.venceMedico || '' },
     { k: 'unidadId', t: 'Tractor asignado', tipo: 'select', opciones: opcionesUnidad('Tractor'), valor: c.unidadId || '', vacio: '— sin asignar —' },
     { k: 'base', t: 'Base / patio', valor: c.base || '' },
+    { k: 'color', t: 'Color del operador y su unidad', tipo: 'color', valor: c.color || '', ancho: 'full' },
     { k: 'notas', t: 'Notas', tipo: 'textarea', valor: c.notas || '', ancho: 'full' }
   ];
 }
@@ -740,7 +810,7 @@ function renderConductores() {
     return `<span class="chip ${dias < 0 ? 'bad' : dias <= 30 ? 'warn' : ''}">${fechaCorta(f)}</span>`;
   };
   const cols = [
-    { t: 'Nombre', v: c => `<strong>${esc(c.nombre)}</strong>` },
+    { t: 'Nombre', v: c => conPunto(c.color || colorAuto(c.nombre), c.nombre) },
     { t: 'Teléfono', v: c => esc(c.telefono) },
     { t: 'Licencia', v: c => esc([c.licencia, c.tipoLicencia].filter(Boolean).join(' · ')) },
     { t: 'Vence licencia', v: c => vence(c.venceLicencia) },
@@ -777,6 +847,7 @@ function editarCliente(id) {
     { k: 'contacto', t: 'Contacto', valor: c.contacto || '' },
     { k: 'telefono', t: 'Teléfono', valor: c.telefono || '' },
     { k: 'horario', t: 'Horario de recibo', valor: c.horario || '', ph: 'Ej. 7:00–15:00' },
+    { k: 'color', t: 'Color en el schedule', tipo: 'color', valor: c.color || '', ancho: 'full' },
     { k: 'notas', t: 'Notas', tipo: 'textarea', valor: c.notas || '', ancho: 'full' }
   ];
   abrirModal(ex ? c.nombre : 'Nuevo cliente', formHTML(campos), [
@@ -807,7 +878,7 @@ function renderClientes() {
   }).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
 
   const cols = [
-    { t: 'Cliente', v: c => `<strong>${esc(c.nombre)}</strong>` },
+    { t: 'Cliente', v: c => conPunto(c.color || colorAuto(c.nombre), c.nombre) },
     { t: 'Dirección', v: c => esc(c.direccion) },
     { t: 'Ciudad', v: c => esc(c.ciudad) },
     { t: 'Estado', v: c => c.estado ? `<span class="chip">${esc(c.estado)}</span>` : '' },
@@ -842,6 +913,7 @@ function importarClientes(texto) {
       contacto: campoCSV(r, 'contacto', 'contact'),
       telefono: campoCSV(r, 'telefono', 'tel', 'phone'),
       horario: campoCSV(r, 'horario', 'hours', 'receiving'),
+      color: campoCSV(r, 'color'),
       notas: campoCSV(r, 'notas', 'observaciones', 'notes')
     };
     Object.keys(datos).forEach(k => { if (datos[k] === '') delete datos[k]; });
@@ -969,6 +1041,454 @@ function dialogoGenerar(plantillaId = '') {
 }
 
 /* =========================================================
+   CAPTURA RÁPIDA — escribir un viaje en una línea
+   ========================================================= */
+const sinAcentos = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/* Convierte texto libre en un viaje. Lo que no reconoce lo deja vacío. */
+function interpretarLinea(texto, fechaBase = hoyISO()) {
+  let t = ' ' + String(texto).replace(/\s+/g, ' ').trim() + ' ';
+  const v = { fecha: '', horaSalida: '', horaLlegada: '', origen: '', destino: '', cliente: '',
+    unidadId: '', remolqueId: '', conductorId: '', notas: '', _texto: texto };
+  const sacar = re => { const m = t.match(re); if (m) t = t.replace(m[0], ' '); return m; };
+
+  /* --- unidades por número económico --- */
+  DB.unidades.forEach(u => {
+    if (!u.numero) return;
+    const clave = esRemolque(u) ? 'remolqueId' : 'unidadId';
+    if (v[clave]) return;
+    const m = sacar(new RegExp('(?:^|[\\s,;(])' + escRe(u.numero) + '(?=[\\s,;.)]|$)', 'i'));
+    if (m) v[clave] = u.id;
+  });
+
+  /* --- operador por nombre o apellido --- */
+  const apellidos = {};
+  DB.conductores.forEach(c => sinAcentos(c.nombre).split(' ').filter(p => p.length > 3)
+    .forEach(p => { (apellidos[p] = apellidos[p] || []).push(c.id); }));
+  for (const c of DB.conductores) {
+    if (v.conductorId) break;
+    if (sinAcentos(t).includes(sinAcentos(c.nombre))) {
+      v.conductorId = c.id;
+      t = t.replace(new RegExp(escRe(c.nombre), 'i'), ' ');
+    }
+  }
+  if (!v.conductorId) {
+    for (const [palabra, ids] of Object.entries(apellidos)) {
+      if (ids.length !== 1) continue;                     // solo si el apellido es único
+      const m = sacar(new RegExp('(?:^|\\s)' + escRe(palabra) + '(?=\\s|$)', 'i'));
+      if (m) { v.conductorId = ids[0]; break; }
+    }
+  }
+
+  /* --- cliente del directorio ---
+     Se deja una marca en su lugar para no romper la ruta: el cliente puede
+     ser justamente el destino ("Ontario a NPT Houston"). */
+  const MARCA = '';
+  for (const c of DB.clientes) {
+    if (!c.nombre || c.nombre.length < 4) continue;
+    if (sinAcentos(t).includes(sinAcentos(c.nombre))) {
+      v.cliente = c.nombre;
+      t = t.replace(new RegExp(escRe(c.nombre), 'i'), ' ' + MARCA + ' ');
+      break;
+    }
+  }
+
+  /* --- fecha --- */
+  const dias = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  if (sacar(/\bpasado\s+ma[nñ]ana\b/i)) v.fecha = addDias(fechaBase, 2);
+  else if (sacar(/\bma[nñ]ana\b/i)) v.fecha = addDias(fechaBase, 1);
+  else if (sacar(/\bhoy\b/i)) v.fecha = fechaBase;
+  if (!v.fecha) {
+    const iso = sacar(/\b(\d{4}-\d{1,2}-\d{1,2})\b/);
+    if (iso) v.fecha = normalizarFecha(iso[1]);
+  }
+  if (!v.fecha) {
+    const dm = sacar(/\b(\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?)\b/);
+    if (dm) {
+      v.fecha = /[/.-]\d{2,4}$/.test(dm[1].replace(/^\d{1,2}[/.-]\d{1,2}/, ''))
+        ? normalizarFecha(dm[1]) : normalizarFecha(dm[1] + '/' + fromISO(fechaBase).getFullYear());
+    }
+  }
+  if (!v.fecha) {
+    const dow = dias.findIndex(d => new RegExp('\\b' + d.slice(0, 3) + '[a-zé]*\\b', 'i').test(sinAcentos(t)));
+    if (dow >= 0) {
+      sacar(new RegExp('\\b' + dias[dow].slice(0, 3) + '[a-zéA-ZÉ]*\\b', 'i'));
+      let f = fechaBase;
+      for (let i = 0; i < 7; i++) { if (fromISO(f).getDay() === dow && (i > 0 || true)) break; f = addDias(f, 1); }
+      while (fromISO(f).getDay() !== dow) f = addDias(f, 1);
+      v.fecha = f;
+    }
+  }
+  if (!v.fecha) v.fecha = fechaBase;
+
+  /* --- horas (necesitan ':' o am/pm/hrs para no confundirse con otros números) --- */
+  const horas = [];
+  t = t.replace(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?|hrs?|horas)\b|\b(\d{1,2}):(\d{2})\b/gi,
+    (todo, h1, m1, suf, h2, m2) => {
+      let h = parseInt(h1 ?? h2, 10);
+      const min = (m1 ?? m2 ?? '00');
+      const s = (suf || '').toLowerCase().replace(/\./g, '');
+      if (s.startsWith('p') && h < 12) h += 12;
+      if (s.startsWith('a') && h === 12) h = 0;
+      if (h <= 23) horas.push(`${pad(h)}:${pad(parseInt(min, 10))}`);
+      return ' ';
+    });
+  v.horaSalida = horas[0] || '';
+  v.horaLlegada = horas[1] || '';
+
+  /* --- ruta --- */
+  const limpiar = s => String(s || '').replace(/^[\s,;.:–-]+|[\s,;.:–-]+$/g, '').trim();
+  let resto = limpiar(t.replace(/\s+/g, ' '));
+  const flecha = resto.match(/^(.*?)\s*(?:->|-->|→|=>)\s*(.*)$/);
+  const conA = resto.match(/^(?:de\s+)?(.+?)\s+(?:a|hacia|hasta|para)\s+(.+)$/i);
+  if (flecha) { v.origen = limpiar(flecha[1]); v.destino = limpiar(flecha[2]); }
+  else if (conA) { v.origen = limpiar(conA[1]); v.destino = limpiar(conA[2]); }
+  else v.destino = resto;
+
+  /* devuelve el nombre del cliente a su lugar; si quedó colgando al final
+     de la ruta (", Ford") se quita para no repetirlo */
+  const restaurar = s => limpiar(String(s || '').split(MARCA).join(v.cliente || '')
+    .replace(new RegExp('[,;]\\s*' + escRe(v.cliente || '\0') + '\\s*$', 'i'), ''));
+  v.origen = restaurar(v.origen);
+  v.destino = restaurar(v.destino);
+  if (!v.destino && v.cliente) v.destino = v.cliente;
+
+  /* --- rellenos automáticos --- */
+  if (v.unidadId && !v.conductorId) {
+    const op = DB.conductores.find(c => c.unidadId === v.unidadId);
+    if (op) v.conductorId = op.id;
+  }
+  if (!v.unidadId && v.conductorId) {
+    const c = conductor(v.conductorId);
+    if (c && c.unidadId) v.unidadId = c.unidadId;
+  }
+  if (!v.cliente && v.destino) {
+    const c = DB.clientes.find(x => sinAcentos(x.nombre) === sinAcentos(v.destino));
+    if (c) v.cliente = c.nombre;
+  }
+  v.estado = DB.catalogos.estadosViaje[0];
+  return v;
+}
+
+/* =========================================================
+   VISTA PREVIA antes de agregar viajes (captura rápida y foto)
+   ========================================================= */
+let previoLista = [];
+function vistaPrevia(viajes, titulo, subtitulo = '') {
+  previoLista = viajes.filter(Boolean);
+  if (!previoLista.length) {
+    return abrirModal(titulo, '<p>No se reconoció ningún viaje. Revisa el texto o la foto e inténtalo de nuevo.</p>',
+      [{ texto: 'Cerrar', clase: 'ghost', accion: cerrarModal }]);
+  }
+  const pinta = () => {
+    const filas = previoLista.map((v, i) => {
+      const faltan = [];
+      if (!v.origen) faltan.push('origen');
+      if (!v.destino) faltan.push('destino');
+      if (!v.unidadId) faltan.push('tractor');
+      if (!v.conductorId) faltan.push('operador');
+      return `<tr>
+        <td>${esc(fechaCorta(v.fecha))}</td>
+        <td>${esc(v.horaSalida || '')}</td>
+        <td>${esc(v.origen || '—')} → ${esc(v.destino || '—')}</td>
+        <td>${v.cliente ? conPunto(colorCliente(v.cliente), v.cliente) : '—'}</td>
+        <td>${esc(nombreUnidad(v.unidadId) || '—')}</td>
+        <td>${v.conductorId ? conPunto(colorConductor(v.conductorId), nombreConductor(v.conductorId)) : '—'}</td>
+        <td>${faltan.length ? `<span class="aviso">falta ${esc(faltan.join(', '))}</span>` : '<span class="chip ok">listo</span>'}</td>
+        <td class="actions"><button class="btn mini" data-editar-previo="${i}">Editar</button>
+          <button class="btn mini" data-quitar-previo="${i}">Quitar</button></td>
+      </tr>`;
+    }).join('');
+    $('#modalBody').innerHTML = `${subtitulo ? `<p class="muted">${esc(subtitulo)}</p>` : ''}
+      <div class="previo tbl-wrap"><table>
+        <thead><tr><th>Fecha</th><th>Hora</th><th>Ruta</th><th>Cliente</th><th>Tractor</th><th>Operador</th><th>Revisar</th><th></th></tr></thead>
+        <tbody>${filas}</tbody></table></div>
+      <p class="hint">Lo que falte se puede completar aquí o después, desde el schedule.</p>`;
+    $('#modalFoot').firstChild && ($('#modalFoot').lastChild.textContent = `Agregar ${previoLista.length} viaje(s)`);
+  };
+
+  abrirModal(titulo, '', [
+    { texto: 'Cancelar', clase: 'ghost', accion: cerrarModal },
+    { texto: `Agregar ${previoLista.length} viaje(s)`, clase: 'primary', accion: () => {
+      previoLista.forEach(v => {
+        const { _texto, ...datos } = v;
+        DB.viajes.push(Object.assign({ id: uid(), creado: new Date().toISOString() }, datos));
+      });
+      const n = previoLista.length;
+      previoLista = [];
+      guardar(); cerrarModal(); render();
+      toast(`${n} viaje(s) agregados al schedule.`);
+    } }
+  ]);
+  pinta();
+
+  $('#modalBody').onclick = e => {
+    const q = e.target.closest('[data-quitar-previo]');
+    if (q) {
+      previoLista.splice(+q.dataset.quitarPrevio, 1);
+      if (!previoLista.length) return cerrarModal();
+      return pinta();
+    }
+    const ed = e.target.closest('[data-editar-previo]');
+    if (ed) {
+      const i = +ed.dataset.editarPrevio;
+      const guardados = previoLista.slice();
+      abrirModal('Revisar viaje', formHTML(camposViaje(guardados[i])), [
+        { texto: 'Regresar', clase: 'ghost', accion: () => vistaPrevia(guardados, titulo, subtitulo) },
+        { texto: 'Aplicar', clase: 'primary', accion: () => {
+          guardados[i] = Object.assign({}, guardados[i], leerForm());
+          vistaPrevia(guardados, titulo, subtitulo);
+        } }
+      ]);
+    }
+  };
+}
+
+/* Captura de una línea, desde la barra del schedule */
+function capturaRapida() {
+  const campo = $('#capturaRapida');
+  const texto = campo.value.trim();
+  if (!texto) return;
+  const v = interpretarLinea(texto);
+  campo.value = '';
+  vistaPrevia([v], 'Revisar el viaje capturado',
+    'Esto es lo que se entendió de lo que escribiste. Corrige lo que haga falta antes de agregarlo.');
+}
+
+/* Pegar una lista completa (de Excel, WhatsApp o correo): una línea por viaje */
+function dialogoPegarTexto() {
+  if (sesion.rol !== 'admin') return;
+  abrirModal('Pegar una lista de viajes',
+    `<p>Pega aquí tu lista: <b>un viaje por renglón</b>. Se reconocen fechas, horas, unidades, operadores y clientes que ya estén capturados.</p>
+     <form id="modalForm"><label>Lista de viajes
+       <textarea name="texto" style="min-height:180px" placeholder="lunes 6:00 am T-14 Ontario a Phoenix, NPT Ontario
+martes 5:30 T-15 Hermosillo a Nogales, Ford
+15/08 07:00 T-19 Guaymas a Obregón"></textarea></label></form>`,
+    [{ texto: 'Cancelar', clase: 'ghost', accion: cerrarModal },
+     { texto: 'Interpretar', clase: 'primary', accion: () => {
+       const lineas = (leerForm().texto || '').split('\n').map(l => l.trim()).filter(Boolean);
+       if (!lineas.length) return toast('No hay nada que interpretar.');
+       vistaPrevia(lineas.map(l => interpretarLinea(l)), 'Revisar los viajes de la lista',
+         `Se interpretaron ${lineas.length} renglón(es).`);
+     } }]);
+}
+
+/* =========================================================
+   LECTURA DE FOTOS Y CAPTURAS DE PANTALLA CON IA
+   ========================================================= */
+const CLAVE_API = 'axl_api_key';
+const MODELO_IA = 'claude-opus-5';
+
+const ESQUEMA_VIAJES = {
+  type: 'object',
+  properties: {
+    viajes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          fecha: { type: 'string', description: 'AAAA-MM-DD. Si la imagen no trae año, usa el año en curso.' },
+          horaSalida: { type: 'string', description: 'HH:MM en 24 horas, o cadena vacía.' },
+          horaLlegada: { type: 'string', description: 'HH:MM en 24 horas, o cadena vacía.' },
+          origen: { type: 'string' },
+          destino: { type: 'string' },
+          cliente: { type: 'string', description: 'Nombre exacto del directorio si corresponde.' },
+          unidad: { type: 'string', description: 'Número económico del tractor, tal como aparece en el inventario.' },
+          remolque: { type: 'string', description: 'Número de la caja o plataforma.' },
+          conductor: { type: 'string', description: 'Nombre completo del operador, tal como aparece en la lista.' },
+          carga: { type: 'string' },
+          referencia: { type: 'string' },
+          notas: { type: 'string' }
+        },
+        required: ['fecha', 'horaSalida', 'horaLlegada', 'origen', 'destino', 'cliente',
+          'unidad', 'remolque', 'conductor', 'carga', 'referencia', 'notas'],
+        additionalProperties: false
+      }
+    },
+    observaciones: { type: 'string', description: 'Qué no se pudo leer con seguridad.' }
+  },
+  required: ['viajes', 'observaciones'],
+  additionalProperties: false
+};
+
+function promptIA() {
+  const lista = (arr, f) => arr.map(f).filter(Boolean).join(' | ') || '(ninguno)';
+  return `Eres el auxiliar de dispatch de ${DB.empresa.nombre || 'una compañía de transportes'}.
+En la imagen viene un schedule de viajes (puede ser una foto, una captura de pantalla, una hoja de Excel o una lista escrita a mano).
+Extrae TODOS los viajes que aparezcan, uno por renglón de la imagen.
+
+Reglas:
+- La fecha de hoy es ${hoyISO()} (${fechaLarga(hoyISO())}). Si la imagen indica solo día y mes, usa el año que corresponda a esa fecha más cercana.
+- Las horas van en formato de 24 horas (06:00, 18:30). Si no hay hora, deja la cadena vacía.
+- Para unidad, remolque, conductor y cliente usa EXACTAMENTE los nombres de las listas de abajo cuando reconozcas a cuál se refiere. Si no corresponde a ninguno, copia lo que dice la imagen.
+- Nunca inventes datos que no estén en la imagen: si un campo no aparece, déjalo como cadena vacía.
+- Si la imagen no contiene ningún viaje, devuelve la lista vacía y explícalo en observaciones.
+
+Tractores: ${lista(DB.unidades.filter(u => !esRemolque(u)), u => u.numero)}
+Remolques: ${lista(DB.unidades.filter(esRemolque), u => u.numero)}
+Operadores: ${lista(DB.conductores, c => c.nombre)}
+Clientes: ${lista(DB.clientes, c => c.nombre)}`;
+}
+
+/* Reduce la imagen si viene enorme, para no gastar de más */
+function prepararImagen(dataUrl, maxLado = 2200) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const lado = Math.max(img.width, img.height);
+      if (lado <= maxLado) {
+        const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+        return m ? resolve({ tipo: m[1], datos: m[2] }) : reject(new Error('Formato de imagen no reconocido.'));
+      }
+      const escala = maxLado / lado;
+      const lienzo = document.createElement('canvas');
+      lienzo.width = Math.round(img.width * escala);
+      lienzo.height = Math.round(img.height * escala);
+      lienzo.getContext('2d').drawImage(img, 0, 0, lienzo.width, lienzo.height);
+      const salida = lienzo.toDataURL('image/jpeg', 0.92);
+      resolve({ tipo: 'image/jpeg', datos: salida.split(',')[1] });
+    };
+    img.onerror = () => reject(new Error('No se pudo abrir la imagen.'));
+    img.src = dataUrl;
+  });
+}
+
+/* Llamada a la API de Claude. Se hace con fetch porque la página no usa
+   empaquetador y el SDK oficial no se puede cargar en un archivo suelto. */
+async function pedirLecturaIA(dataUrl) {
+  const llave = localStorage.getItem(CLAVE_API);
+  if (!llave) throw new Error('Falta la llave de API. Configúrala en "Datos y Ajustes".');
+  const img = await prepararImagen(dataUrl);
+  let r;
+  try {
+    r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': llave,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: MODELO_IA,
+        max_tokens: 16000,
+        output_config: { effort: 'medium', format: { type: 'json_schema', schema: ESQUEMA_VIAJES } },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: img.tipo, data: img.datos } },
+            { type: 'text', text: promptIA() }
+          ]
+        }]
+      })
+    });
+  } catch (e) {
+    throw new Error('No se pudo conectar con Claude. Si abriste la página desde la liga de claude.ai, ' +
+      'el navegador bloquea esta conexión: usa la versión de tu computadora o de GitHub Pages.');
+  }
+  if (!r.ok) {
+    let detalle = '';
+    try { detalle = (await r.json()).error?.message || ''; } catch { /* respuesta sin JSON */ }
+    if (r.status === 401) throw new Error('La llave de API no es válida.');
+    if (r.status === 429) throw new Error('Se alcanzó el límite de la cuenta de Claude. Espera un momento y reintenta.');
+    throw new Error(`Claude respondió con error ${r.status}. ${detalle}`);
+  }
+  const datos = await r.json();
+  if (datos.stop_reason === 'refusal') throw new Error('Claude no pudo procesar esta imagen.');
+  const texto = (datos.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  if (!texto) throw new Error('Claude no devolvió información de la imagen.');
+  try { return JSON.parse(texto); }
+  catch { throw new Error('La respuesta de Claude no se pudo leer. Vuelve a intentar.'); }
+}
+
+/* Convierte lo que devolvió la IA en viajes de la aplicación */
+function mapearViajeIA(r) {
+  const buscaUnidad = (txt, categoria) => {
+    if (!txt) return '';
+    const u = DB.unidades.find(x => (x.categoria || 'Tractor') === categoria &&
+      sinAcentos(x.numero) === sinAcentos(txt)) ||
+      DB.unidades.find(x => (x.categoria || 'Tractor') === categoria && sinAcentos(x.placa || '') === sinAcentos(txt));
+    return u ? u.id : '';
+  };
+  const c = r.conductor ? DB.conductores.find(x => sinAcentos(x.nombre) === sinAcentos(r.conductor)) ||
+    DB.conductores.find(x => sinAcentos(x.nombre).includes(sinAcentos(r.conductor))) : null;
+  const cli = r.cliente ? DB.clientes.find(x => sinAcentos(x.nombre) === sinAcentos(r.cliente)) : null;
+  const v = {
+    fecha: normalizarFecha(r.fecha) || hoyISO(),
+    horaSalida: r.horaSalida || '', horaLlegada: r.horaLlegada || '',
+    origen: r.origen || '', destino: r.destino || '',
+    cliente: cli ? cli.nombre : (r.cliente || ''),
+    unidadId: buscaUnidad(r.unidad, 'Tractor'),
+    remolqueId: buscaUnidad(r.remolque, 'Remolque'),
+    conductorId: c ? c.id : '',
+    carga: r.carga || '', referencia: r.referencia || '',
+    notas: [r.notas, !c && r.conductor ? `Operador según la foto: ${r.conductor}` : '',
+      !buscaUnidad(r.unidad, 'Tractor') && r.unidad ? `Unidad según la foto: ${r.unidad}` : '']
+      .filter(Boolean).join(' — '),
+    estado: DB.catalogos.estadosViaje[0]
+  };
+  if (v.unidadId && !v.conductorId) {
+    const op = DB.conductores.find(x => x.unidadId === v.unidadId);
+    if (op) v.conductorId = op.id;
+  }
+  return v;
+}
+
+function dialogoLeerFoto() {
+  if (sesion.rol !== 'admin') return;
+  if (!localStorage.getItem(CLAVE_API)) {
+    return abrirModal('Falta configurar la llave',
+      `<p>Para leer fotos hace falta una llave de la API de Claude. Se configura una sola vez en
+       <b>Datos y Ajustes → Leer fotos y capturas con IA</b>, y se guarda solo en este navegador.</p>`,
+      [{ texto: 'Cerrar', clase: 'ghost', accion: cerrarModal },
+       { texto: 'Ir a Ajustes', clase: 'primary', accion: () => { cerrarModal(); irA('datos'); } }]);
+  }
+  abrirModal('Leer un schedule desde una foto',
+    `<div class="zona-imagen" id="zonaImagen">
+       <b>Arrastra aquí la foto o la captura</b><br>
+       o pégala con Ctrl+V, o haz clic para elegir el archivo
+     </div>
+     <p class="hint">Funciona con fotos de una hoja, capturas de Excel o de WhatsApp. Cada lectura se cobra a tu cuenta de Claude.</p>`,
+    [{ texto: 'Cancelar', clase: 'ghost', accion: cerrarModal }]);
+
+  const zona = $('#zonaImagen');
+  const procesar = dataUrl => {
+    zona.innerHTML = `<div class="cargando"><span class="spinner"></span> Leyendo la imagen…</div>
+      <img src="${dataUrl}" alt="Imagen que se está leyendo">`;
+    pedirLecturaIA(dataUrl)
+      .then(res => {
+        const viajes = (res.viajes || []).map(mapearViajeIA);
+        cerrarModal();
+        vistaPrevia(viajes, 'Viajes leídos de la imagen',
+          res.observaciones ? `Nota de la lectura: ${res.observaciones}` : 'Revisa que todo esté correcto antes de agregarlos.');
+      })
+      .catch(err => {
+        zona.innerHTML = `<p class="error">${esc(err.message)}</p><p>Haz clic para intentar con otra imagen.</p>`;
+      });
+  };
+  const leerArchivo = f => {
+    if (!f || !/^image\//.test(f.type)) return toast('Elige un archivo de imagen.');
+    const fr = new FileReader();
+    fr.onload = () => procesar(String(fr.result));
+    fr.readAsDataURL(f);
+  };
+  const selector = $('#imgPicker');
+  selector.value = '';
+  selector.onchange = () => leerArchivo(selector.files[0]);
+  zona.onclick = () => { selector.value = ''; selector.click(); };
+  zona.ondragover = e => { e.preventDefault(); zona.classList.add('sobre'); };
+  zona.ondragleave = () => zona.classList.remove('sobre');
+  zona.ondrop = e => { e.preventDefault(); zona.classList.remove('sobre'); leerArchivo(e.dataTransfer.files[0]); };
+  const alPegar = e => {
+    const item = [...(e.clipboardData?.items || [])].find(i => /^image\//.test(i.type));
+    if (item) { e.preventDefault(); leerArchivo(item.getAsFile()); }
+  };
+  document.addEventListener('paste', alPegar);
+  $('#modalClose').addEventListener('click', () => document.removeEventListener('paste', alPegar), { once: true });
+}
+
+/* =========================================================
    PANEL
    ========================================================= */
 function renderPanel() {
@@ -996,7 +1516,7 @@ function renderPanel() {
         { t: 'Hora', v: v => esc(v.horaSalida || '') },
         { t: 'Ruta', v: v => esc(`${v.origen || '?'} → ${v.destino || '?'}`) },
         { t: 'Unidad', v: v => esc(nombreUnidad(v.unidadId)) },
-        { t: 'Conductor', v: v => esc(nombreConductor(v.conductorId)) },
+        { t: 'Operador', v: v => conPunto(colorConductor(v.conductorId), nombreConductor(v.conductorId)) },
         { t: 'Estado', v: v => `<span class="chip ${claseEstado(v.estado)}">${esc(v.estado || '')}</span>` }
       ], prox, v => `<button class="btn mini" data-viaje="${v.id}">Ver</button>`)}</div>`
     : '<p class="muted">No hay viajes programados para hoy ni mañana.</p>';
@@ -1076,7 +1596,8 @@ const COLS_CONDUCTOR = [
   { titulo: 'licencia', valor: c => c.licencia }, { titulo: 'tipoLicencia', valor: c => c.tipoLicencia },
   { titulo: 'venceLicencia', valor: c => c.venceLicencia }, { titulo: 'venceMedico', valor: c => c.venceMedico },
   { titulo: 'unidad', valor: c => nombreUnidad(c.unidadId) }, { titulo: 'base', valor: c => c.base },
-  { titulo: 'estado', valor: c => c.estado }, { titulo: 'notas', valor: c => c.notas }
+  { titulo: 'estado', valor: c => c.estado }, { titulo: 'color', valor: c => c.color },
+  { titulo: 'notas', valor: c => c.notas }
 ];
 const COLS_VIAJE = [
   { titulo: 'fecha', valor: v => v.fecha }, { titulo: 'horaSalida', valor: v => v.horaSalida },
@@ -1094,7 +1615,7 @@ const COLS_CLIENTE = [
   { titulo: 'ciudad', valor: c => c.ciudad }, { titulo: 'estado', valor: c => c.estado },
   { titulo: 'cp', valor: c => c.cp }, { titulo: 'contacto', valor: c => c.contacto },
   { titulo: 'telefono', valor: c => c.telefono }, { titulo: 'horario', valor: c => c.horario },
-  { titulo: 'notas', valor: c => c.notas }
+  { titulo: 'color', valor: c => c.color }, { titulo: 'notas', valor: c => c.notas }
 ];
 
 /* Normaliza fechas de CSV: acepta 2026-07-31, 31/07/2026 y 7/31/2026 */
@@ -1171,6 +1692,7 @@ function importarConductores(texto) {
       venceLicencia: normalizarFecha(campoCSV(r, 'vencelicencia', 'vence licencia', 'vigencia licencia', 'expira licencia')),
       venceMedico: normalizarFecha(campoCSV(r, 'vencemedico', 'examen medico', 'medico')),
       base: campoCSV(r, 'base', 'patio', 'ubicacion'),
+      color: campoCSV(r, 'color'),
       estado: campoCSV(r, 'estado', 'status') || DB.catalogos.estadosConductor[0],
       notas: campoCSV(r, 'notas', 'observaciones', 'notes'),
       unidadId: u ? u.id : ''
@@ -1400,6 +1922,10 @@ function conectarEventos() {
   $('#filtroUnidad').onchange = e => { estadoUI.fUnidad = e.target.value; renderSchedule(); };
   $('#filtroConductor').onchange = e => { estadoUI.fConductor = e.target.value; renderSchedule(); };
   $('#nuevoViajeBtn').onclick = () => editarViaje(null, { fecha: hoyISO() });
+  $('#capturaBtn').onclick = capturaRapida;
+  $('#capturaRapida').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); capturaRapida(); } };
+  $('#pegarTextoBtn').onclick = dialogoPegarTexto;
+  $('#leerFotoBtn').onclick = dialogoLeerFoto;
   $('#generarPlantillaBtn').onclick = () => dialogoGenerar();
   $('#generarPlantillaBtn2').onclick = () => dialogoGenerar();
   $('#exportViajesBtn').onclick = () =>
@@ -1442,6 +1968,53 @@ function conectarEventos() {
     guardar(); render(); toast('Datos de la compañía guardados.');
   };
   $('#cargarAxlBtn').onclick = () => cargarInventarioAXL();
+
+  /* Llave de la API para leer fotos */
+  const pintarEstadoIa = () => {
+    const llave = localStorage.getItem(CLAVE_API);
+    $('#estadoIa').textContent = llave
+      ? `Llave guardada (termina en …${llave.slice(-4)}). Ya puedes usar "Leer foto con IA" en el schedule.`
+      : 'Sin llave configurada: la lectura de fotos está apagada.';
+    $('#cfgApiKey').value = '';
+    $('#cfgApiKey').placeholder = llave ? '•••••••• (guardada)' : 'sk-ant-...';
+  };
+  pintarEstadoIa();
+  $('#iaForm').onsubmit = e => {
+    e.preventDefault();
+    const llave = $('#cfgApiKey').value.trim();
+    if (!llave) return toast('Pega la llave antes de guardar.');
+    localStorage.setItem(CLAVE_API, llave);
+    pintarEstadoIa();
+    toast('Llave guardada en este navegador.');
+  };
+  $('#borrarIaBtn').onclick = () => {
+    localStorage.removeItem(CLAVE_API);
+    pintarEstadoIa();
+    toast('Llave borrada.');
+  };
+  $('#probarIaBtn').onclick = async () => {
+    const llave = $('#cfgApiKey').value.trim() || localStorage.getItem(CLAVE_API);
+    if (!llave) return toast('Primero guarda una llave.');
+    $('#estadoIa').textContent = 'Probando la conexión…';
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json', 'x-api-key': llave,
+          'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: MODELO_IA, max_tokens: 16,
+          messages: [{ role: 'user', content: 'Responde solamente: listo' }]
+        })
+      });
+      $('#estadoIa').textContent = r.ok
+        ? '✓ Conexión correcta: la lectura de fotos está lista.'
+        : (r.status === 401 ? '✗ La llave no es válida.' : `✗ Claude respondió con error ${r.status}.`);
+    } catch {
+      $('#estadoIa').textContent = '✗ El navegador bloqueó la conexión. Abre la página desde tu computadora o desde GitHub Pages.';
+    }
+  };
   $('#passForm').onsubmit = async e => {
     e.preventDefault();
     const act = $('#passActual').value, n1 = $('#passNueva').value, n2 = $('#passNueva2').value;

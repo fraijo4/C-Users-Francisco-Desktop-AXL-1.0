@@ -43,9 +43,24 @@ Quien solo va a consultar entra en la pestaña **Consulta**, sin contraseña.
   automáticos: seguros, verificaciones y licencias por vencer (o vencidas), viajes sin
   unidad o sin conductor, y empalmes.
 - **Schedule** — el calendario de viajes en tres vistas: **Semana**, **Mes** y **Lista**.
-  Se navega con `‹ Hoy ›`. En la vista de semana, el administrador agrega un viaje con el
-  botón *+ Agregar* del día. Se puede filtrar por unidad, conductor, estado o buscar texto,
-  y exportar lo filtrado a CSV.
+  Se navega con `‹ Hoy ›`. Se puede filtrar por unidad, conductor, estado o buscar texto,
+  y exportar lo filtrado a CSV. Cada viaje se pinta con el **color de su cliente** y trae un
+  punto con el **color del operador**; arriba aparece la leyenda de los colores de la semana.
+
+  Hay cuatro formas de programar un viaje, de la más rápida a la más detallada:
+
+  1. **Una línea:** escribes `mañana 6am T-14 Ontario a NPT Houston` y presionas Enter.
+     Reconoce la fecha (hoy, mañana, días de la semana, `15/08`), la hora, el número
+     económico, el operador y el cliente. Antes de guardar te muestra qué entendió.
+  2. **Pegar lista:** pegas varios renglones de Excel, WhatsApp o un correo — un viaje por
+     renglón — y los interpreta todos de una vez.
+  3. **Leer foto con IA:** subes una foto del schedule, una captura de Excel o de WhatsApp
+     y Claude lee los viajes y los acomoda. Requiere configurar una llave de API (abajo).
+  4. **Formulario completo**, con todos los campos.
+
+  En los cuatro casos aparece una **vista previa**: los renglones a los que les falta algo
+  se marcan en ámbar, se pueden editar o quitar uno por uno, y nada se guarda hasta que
+  aprietas *Agregar*.
 - **Inventario** — tractores y remolques en una sola lista, con filtro para ver solo unos u
   otros: número económico, categoría, tipo, placas de USA y de México, marca, modelo, año,
   VIN, capacidad, odómetro, ubicación, operador asignado, estado y fechas de seguro,
@@ -55,6 +70,13 @@ Quien solo va a consultar entra en la pestaña **Consulta**, sin contraseña.
 - **Clientes** — el directorio de entregas: nombre, dirección, ciudad, estado, contacto,
   teléfono y horario de recibo. Los clientes y sus ciudades aparecen como sugerencias al
   capturar el origen y el destino de un viaje, para no escribirlos completos cada vez.
+
+### Colores
+
+Cada cliente y cada operador tienen su color. Se reparten solos de una paleta de 16 tonos
+al cargar la información, y se cambian a mano en la ficha del cliente o del operador —
+el schedule se repinta al instante. El tractor toma el color de su operador asignado, así
+que en el inventario se reconoce de un vistazo de quién es cada unidad.
 - **Plantillas** — rutas que se repiten (por ejemplo: lunes, miércoles y viernes,
   Hermosillo → Nogales, 5:00 am). Con el botón **Generar** llenas el schedule de una semana
   o un mes completo de un jalón. Si un viaje ya fue generado antes, no se duplica.
@@ -74,6 +96,25 @@ acepta separadores `,` `;` o tabulador, y entiende fechas `2026-08-15`, `15/08/2
 **Si vuelves a importar el mismo archivo, los registros no se duplican:** cuando el número
 económico o la placa ya existen, la unidad se actualiza con los datos nuevos. Lo mismo con
 los conductores, comparando por nombre.
+
+## Leer fotos con IA
+
+En *Datos y Ajustes → Leer fotos y capturas con IA* se pega una llave de la API de Claude
+(se obtiene en platform.claude.com → API keys). La llave se guarda **solo en ese navegador**
+y **no se incluye en los respaldos**. Con el botón *Probar conexión* se verifica antes de usarla.
+
+Cómo funciona: la página encoge la imagen si viene muy grande, se la manda a Claude junto con
+las listas de tractores, remolques, operadores y clientes que ya tienes capturados, y pide de
+vuelta los viajes en un formato fijo. Lo que reconoce del inventario lo liga solo; lo que no
+reconoce **no se inventa** — se anota en las notas del viaje (por ejemplo *"Unidad según la
+foto: T-99"*) y el renglón se marca en la vista previa para que lo revises.
+
+Dos cosas a tener en cuenta:
+
+- Cada lectura se cobra a tu cuenta de Claude.
+- Si abres la página desde la liga de claude.ai, el navegador bloquea esa conexión por
+  seguridad. La lectura de fotos funciona en la versión que abres desde tu computadora o
+  desde GitHub Pages. Todo lo demás funciona igual en las dos.
 
 ## Dónde se guarda la información y cómo no perderla
 
