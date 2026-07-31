@@ -147,6 +147,55 @@ td.actions{white-space:nowrap;text-align:right}
 .zona-imagen.sobre{border-color:var(--brand);color:var(--brand)}
 .zona-imagen img{max-width:100%;max-height:220px;border-radius:8px;margin-top:10px}
 
+/* ===== Hoja diaria (el formato de siempre, en pantalla) ===== */
+:root{ --hoja-head:#fde047; --hoja-head-ink:#332a00; --hoja-cel:#ffffff; }
+html[data-theme="dark"]{ --hoja-head:#5b5210; --hoja-head-ink:#fbeaa0; --hoja-cel:#141b25; }
+@media (prefers-color-scheme: dark){ html:not([data-theme]){ --hoja-head:#5b5210; --hoja-head-ink:#fbeaa0; --hoja-cel:#141b25; } }
+
+.dia-bloque{margin-bottom:22px}
+.dia-titulo{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 6px;padding:0 2px}
+.dia-titulo h3{font-size:21px;margin:0;letter-spacing:-.01em}
+.dia-titulo .cuenta{color:var(--muted);font-size:13px}
+.dia-titulo .btn{margin-left:auto}
+.dia-vacio{border:1px dashed var(--line);border-radius:8px;padding:6px 12px;color:var(--muted);font-size:13px;
+  display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.dia-vacio b{color:var(--ink);font-weight:600}
+.dia-vacio .btn{margin-left:auto}
+
+.hoja-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel);box-shadow:var(--shadow)}
+table.hoja{border-collapse:collapse;width:100%;min-width:1040px;font-size:13px;background:var(--hoja-cel)}
+table.hoja th{background:var(--hoja-head);color:var(--hoja-head-ink);text-transform:none;letter-spacing:0;
+  font-size:12.5px;font-weight:700;cursor:default;border:1px solid var(--line);padding:5px 8px;white-space:nowrap}
+table.hoja td{border:1px solid var(--line);padding:0;vertical-align:middle;height:30px}
+table.hoja tbody tr:hover{background:color-mix(in srgb,var(--brand) 5%,transparent)}
+table.hoja .cancelada{opacity:.5;text-decoration:line-through}
+.col-tick{width:62px;text-align:center}
+.col-acc{width:70px}
+
+/* celdas editables en el lugar */
+.cel{display:block;padding:5px 8px;min-height:28px;min-width:70px;outline:none}
+body:not(.role-guest) .cel[contenteditable]:hover{background:color-mix(in srgb,var(--brand) 8%,transparent);cursor:text}
+body:not(.role-guest) .cel[contenteditable]:focus{background:var(--panel);box-shadow:inset 0 0 0 2px var(--brand)}
+.cel.con-color{display:flex;align-items:center;gap:6px}
+.cel-sel{width:100%;border:0;background:transparent;border-radius:0;padding:4px 6px;font:inherit;color:var(--ink);
+  appearance:none;cursor:pointer}
+.cel-sel:hover{background:color-mix(in srgb,var(--brand) 8%,transparent)}
+.cel-sel:focus{outline:2px solid var(--brand);outline-offset:-2px}
+body.role-guest .cel-sel{pointer-events:none;appearance:none}
+
+/* casillas de Papeles / Previo / Cruzó / Entregado */
+.tick{width:22px;height:22px;border-radius:50%;border:2px dashed var(--line);background:transparent;
+  cursor:pointer;color:transparent;font-size:13px;line-height:1;padding:0;display:inline-grid;place-items:center;
+  transition:background .12s ease,border-color .12s ease}
+.tick:hover{border-color:var(--brand)}
+.tick[aria-pressed="true"]{background:var(--ok);border:2px solid var(--ok);color:#fff}
+.tick:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+body.role-guest .tick{cursor:default}
+body.role-guest .tick:hover{border-color:var(--line)}
+.ticks-mini{display:flex;gap:3px;align-items:center}
+.ticks-mini i{width:9px;height:9px;border-radius:50%;border:1px solid var(--line);display:inline-block}
+.ticks-mini i.on{background:var(--ok);border-color:var(--ok)}
+
 /* ===== Semana ===== */
 .semana{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:10px;overflow-x:auto}
 .dia{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);min-height:150px;display:flex;flex-direction:column;box-shadow:var(--shadow)}

@@ -42,7 +42,18 @@ Quien solo va a consultar entra en la pestaña **Consulta**, sin contraseña.
 - **Panel** — viajes de hoy y mañana, unidades libres, ingreso de la semana y avisos
   automáticos: seguros, verificaciones y licencias por vencer (o vencidas), viajes sin
   unidad o sin conductor, y empalmes.
-- **Schedule** — el calendario de viajes en tres vistas: **Semana**, **Mes** y **Lista**.
+- **Schedule** — cuatro vistas: **Hoja diaria** (la que sale al entrar), **Semana**, **Mes** y **Lista**.
+
+  La **hoja diaria** es el mismo formato de siempre: un bloque por día con el encabezado
+  *Lunes 07/27/2026* y la tabla con Hora, Cliente, Operador, Origen, Destino, Stop, Tractor,
+  Remolque, Facturas y las cuatro casillas de avance: **Papeles · Previo · Cruzó · Entregado**.
+
+  - Las casillas se pican y se guardan solas. Marcar *Entregado* pone el viaje en estado
+    Entregado; desmarcarlo lo regresa a Programado.
+  - El administrador **edita sobre la tabla**: clic en cualquier celda de texto y escribes
+    (Enter guarda, Escape cancela); operador, tractor y remolque son listas desplegables.
+    Si al reasignar una unidad quedan viajes encimados, avisa en el momento.
+  - Quien entra en modo consulta ve la hoja igual, pero sin poder tocarla.
   Se navega con `‹ Hoy ›`. Se puede filtrar por unidad, conductor, estado o buscar texto,
   y exportar lo filtrado a CSV. Cada viaje se pinta con el **color de su cliente** y trae un
   punto con el **color del operador**; arriba aparece la leyenda de los colores de la semana.
@@ -70,6 +81,12 @@ Quien solo va a consultar entra en la pestaña **Consulta**, sin contraseña.
 - **Clientes** — el directorio de entregas: nombre, dirección, ciudad, estado, contacto,
   teléfono y horario de recibo. Los clientes y sus ciudades aparecen como sugerencias al
   capturar el origen y el destino de un viaje, para no escribirlos completos cada vez.
+
+### Formato de fecha
+
+Viene configurado como **mes/día/año** (07/24/2026), igual que el schedule de AXL. Se cambia
+a día/mes/año en *Datos y Ajustes → Datos de la compañía*. El ajuste también decide cómo se
+entienden las fechas ambiguas al importar un CSV o al capturar `08/05` en una línea.
 
 ### Colores
 

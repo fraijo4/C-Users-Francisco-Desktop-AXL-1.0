@@ -17,6 +17,9 @@ function esc(v) {
 
 /* Fechas: se manejan como texto YYYY-MM-DD para no depender de zona horaria */
 const pad = n => String(n).padStart(2, '0');
+/* Formato de fecha de la compañía: 'mdy' (mes/día/año, como el schedule de AXL)
+   o 'dmy' (día/mes/año). Se elige en Datos y Ajustes. */
+const formatoFecha = () => (DB.preferencias && DB.preferencias.formatoFecha) || 'mdy';
 const hoyISO = () => toISO(new Date());
 function toISO(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 function fromISO(s) {
@@ -37,7 +40,14 @@ function fechaLarga(iso) {
 function fechaCorta(iso) {
   const d = fromISO(iso);
   if (isNaN(d)) return iso || '—';
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const dd = pad(d.getDate()), mm = pad(d.getMonth() + 1);
+  return formatoFecha() === 'mdy' ? `${mm}/${dd}/${d.getFullYear()}` : `${dd}/${mm}/${d.getFullYear()}`;
+}
+/* Encabezado de cada día, igual que en la hoja: "Viernes 07/24/2026" */
+function fechaEncabezado(iso) {
+  const d = fromISO(iso);
+  if (isNaN(d)) return iso || '';
+  return `${DIAS[(d.getDay() + 6) % 7]} ${fechaCorta(iso)}`;
 }
 /* índice de día de semana 0=lunes … 6=domingo */
 const dowLunes = iso => (fromISO(iso).getDay() + 6) % 7;
@@ -129,6 +139,7 @@ const ESTADO_INICIAL = () => ({
   empresa: Object.assign({}, EMPRESA_DEF),
   auth: { hash: '', salt: '', configurada: false },
   catalogos: JSON.parse(JSON.stringify(CATALOGOS_DEF)),
+  preferencias: { formatoFecha: 'mdy' },
   unidades: [],
   conductores: [],
   clientes: [],
@@ -149,8 +160,13 @@ function cargar() {
       DB.catalogos = Object.assign(JSON.parse(JSON.stringify(CATALOGOS_DEF)), d.catalogos || {});
       DB.empresa = Object.assign({}, EMPRESA_DEF, d.empresa || {});
       DB.auth = Object.assign({ hash: '', salt: '', configurada: false }, d.auth || {});
+      DB.preferencias = Object.assign({ formatoFecha: 'mdy' }, d.preferencias || {});
       ['unidades', 'conductores', 'clientes', 'viajes', 'plantillas'].forEach(k => {
         if (!Array.isArray(DB[k])) DB[k] = [];
+      });
+      DB.viajes.forEach(v => {
+        if (!v.estatus) v.estatus = {};
+        if (!v.facturas && v.referencia) v.facturas = v.referencia;   // la columna se llamaba "referencia"
       });
     }
   } catch (e) {
@@ -385,8 +401,9 @@ function camposViaje(v = {}) {
     { k: 'horaLlegada', t: 'Hora estimada de llegada', tipo: 'time', valor: v.horaLlegada || '' },
     { k: 'origen', t: 'Origen', valor: v.origen || '', ph: 'Ciudad / planta', req: true, lista: lugares() },
     { k: 'destino', t: 'Destino', valor: v.destino || '', ph: 'Ciudad / cliente', req: true, lista: lugares() },
+    { k: 'stop', t: 'Stop', valor: v.stop || '', ph: 'Parada intermedia' },
     { k: 'cliente', t: 'Cliente', valor: v.cliente || '', lista: nombresCliente() },
-    { k: 'referencia', t: 'Referencia / orden', valor: v.referencia || '' },
+    { k: 'facturas', t: 'Facturas', valor: v.facturas || '', ph: 'A-4795 // TOD-7165-H1' },
     { k: 'unidadId', t: 'Tractor', tipo: 'select', opciones: opcionesUnidad('Tractor'), valor: v.unidadId || '', vacio: '— sin asignar —' },
     { k: 'remolqueId', t: 'Remolque / caja', tipo: 'select', opciones: opcionesUnidad('Remolque'), valor: v.remolqueId || '', vacio: '— sin asignar —' },
     { k: 'conductorId', t: 'Conductor', tipo: 'select', opciones: opcionesConductor(), valor: v.conductorId || '', vacio: '— sin asignar —' },
@@ -397,12 +414,20 @@ function camposViaje(v = {}) {
   ];
 }
 
+/* Papeles → Previo → Cruzó → Entregado: las cuatro etapas de la hoja */
+const ETAPAS = [['papeles', 'Papeles'], ['previo', 'Previo'], ['cruzo', 'Cruzó'], ['entregado', 'Entregado']];
+const etapasDe = v => (v && v.estatus) || {};
+
 function editarViaje(id, prefill = {}) {
   if (sesion.rol !== 'admin') return;
   const existente = id ? DB.viajes.find(v => v.id === id) : null;
   const base = existente || prefill;
+  const est = etapasDe(base);
+  const checksEtapas = `<div class="full"><label>Avance del viaje</label><div class="dias-check">${
+    ETAPAS.map(([k, t]) => `<label><input type="checkbox" name="etapas" value="${k}" ${est[k] ? 'checked' : ''}> ${t}</label>`).join('')
+  }</div></div>`;
   abrirModal(existente ? 'Editar viaje' : 'Nuevo viaje',
-    formHTML(camposViaje(base)) + '<p id="avisoConflicto" class="hint"></p>',
+    `<form id="modalForm"><div class="form-grid">${camposViaje(base).map(campo).join('')}${checksEtapas}</div></form>`,
     [
       ...(existente ? [{ texto: 'Duplicar', clase: 'ghost', accion: () => { const c = { ...existente }; delete c.id; cerrarModal(); editarViaje(null, c); } }] : []),
       ...(existente ? [{ texto: 'Eliminar', clase: 'danger', accion: () => eliminarViaje(existente.id) }] : []),
@@ -415,8 +440,13 @@ function guardarViaje(existente) {
   const d = leerForm();
   if (!d.fecha) return toast('Falta la fecha del viaje.');
   if (!d.origen && !d.destino) return toast('Indica al menos origen y destino.');
-  const viaje = Object.assign({ id: existente ? existente.id : uid(), creado: existente?.creado || new Date().toISOString() }, existente || {}, d);
+  const etapas = {};
+  ETAPAS.forEach(([k]) => { etapas[k] = (d.etapas || []).includes(k); });
+  delete d.etapas;
+  const viaje = Object.assign({ id: existente ? existente.id : uid(), creado: existente?.creado || new Date().toISOString() },
+    existente || {}, d, { estatus: etapas });
   viaje.modificado = new Date().toISOString();
+  if (etapas.entregado && !/cancel/i.test(viaje.estado || '')) viaje.estado = 'Entregado';
 
   const choques = conflictos(viaje);
   const aplicar = () => {
@@ -463,7 +493,8 @@ function verViaje(id) {
       <dt>Estado</dt><dd><span class="chip ${claseEstado(v.estado)}">${esc(v.estado || '—')}</span></dd>
       ${fila('Ruta', `${v.origen || '?'} → ${v.destino || '?'}`)}
       ${fila('Cliente', v.cliente)}
-      ${fila('Referencia', v.referencia)}
+      ${fila('Stop', v.stop)}
+      ${fila('Facturas', v.facturas || v.referencia)}
       ${fila('Tractor', nombreUnidad(v.unidadId))}
       ${fila('Remolque', nombreUnidad(v.remolqueId))}
       ${fila('Conductor', nombreConductor(v.conductorId))}
@@ -471,6 +502,8 @@ function verViaje(id) {
       ${fila('Millas / km', v.millas)}
       ${fila('Tarifa', v.tarifa ? '$' + v.tarifa : '')}
       ${fila('Notas', v.notas)}
+      <dt>Avance</dt><dd>${ETAPAS.map(([k, t]) =>
+        `<span class="chip ${etapasDe(v)[k] ? 'ok' : ''}">${etapasDe(v)[k] ? '✓' : '○'} ${esc(t)}</span>`).join(' ')}</dd>
     </dl>${choques.length ? `<p class="error">⚠ Empalme con ${choques.length} viaje(s) el mismo día.</p>` : ''}</div>`,
     [{ texto: 'Cerrar', clase: 'ghost', accion: cerrarModal },
      { texto: 'Editar', clase: 'primary', adminOnly: true, accion: () => editarViaje(id) }]);
@@ -478,7 +511,7 @@ function verViaje(id) {
 
 /* ---------------- Filtros del schedule ---------------- */
 let estadoUI = {
-  vista: 'semana',
+  vista: 'hoja',
   ancla: hoyISO(),
   buscar: '', fEstado: '', fUnidad: '', fConductor: '',
   ordenUnidades: { col: 'numero', asc: true },
@@ -514,7 +547,9 @@ function tarjetaViaje(v) {
     ${v.cliente ? `<div class="meta"><span class="punto" style="--c:${colorCliente(v.cliente)}"></span>${esc(v.cliente)}</div>` : ''}
     ${op ? `<div class="meta"><span class="punto" style="--c:${colorConductor(v.conductorId)}"></span>${esc(op)}</div>` : ''}
     ${equipo ? `<div class="meta">${esc(equipo)}</div>` : ''}
-    <div class="meta"><span class="chip ${cls}">${esc(v.estado || 'Programado')}</span></div>
+    <div class="meta"><span class="chip ${cls}">${esc(v.estado || 'Programado')}</span>
+      <span class="ticks-mini" title="Papeles · Previo · Cruzó · Entregado">${
+        ETAPAS.map(([k]) => `<i class="${etapasDe(v)[k] ? 'on' : ''}"></i>`).join('')}</span></div>
   </div>`;
 }
 
@@ -534,6 +569,118 @@ function renderLeyenda(viajes) {
   </div>`;
 }
 
+/* =========================================================
+   HOJA DIARIA — el mismo formato del schedule de siempre,
+   editable directamente sobre la tabla
+   ========================================================= */
+const COLUMNAS_HOJA = [
+  { t: 'Hora', k: 'horaSalida', ancho: 62 },
+  { t: 'Cliente', k: 'cliente', ancho: 140, color: v => colorCliente(v.cliente) },
+  { t: 'Operador', k: 'conductorId', tipo: 'conductor', ancho: 178 },
+  { t: 'Origen', k: 'origen', ancho: 118 },
+  { t: 'Destino', k: 'destino', ancho: 118 },
+  { t: 'Stop', k: 'stop', ancho: 92 },
+  { t: 'Tractor', k: 'unidadId', tipo: 'tractor', ancho: 92 },
+  { t: 'Remolque', k: 'remolqueId', tipo: 'remolque', ancho: 108 },
+  { t: 'Facturas', k: 'facturas', ancho: 168 }
+];
+
+function celdaSelect(v, col) {
+  const ops = col.tipo === 'conductor' ? opcionesConductor()
+    : opcionesUnidad(col.tipo === 'remolque' ? 'Remolque' : 'Tractor');
+  const actual = v[col.k] || '';
+  const corto = o => String(o.t).split(' · ')[0];
+  return `<select class="cel-sel" data-id="${v.id}" data-campo="${col.k}" ${sesion.rol !== 'admin' ? 'disabled' : ''}>
+    <option value="">—</option>
+    ${ops.map(o => `<option value="${esc(o.v)}" ${o.v === actual ? 'selected' : ''}>${esc(corto(o))}</option>`).join('')}
+  </select>`;
+}
+
+function filaHoja(v) {
+  const editable = sesion.rol === 'admin';
+  const celdas = COLUMNAS_HOJA.map(col => {
+    if (col.tipo) return `<td>${celdaSelect(v, col)}</td>`;
+    const texto = esc(v[col.k] || '');
+    const punto = col.color ? `<span class="punto" style="--c:${col.color(v) || 'transparent'}"></span>` : '';
+    return `<td><span class="cel ${col.color ? 'con-color' : ''}" ${editable ? 'contenteditable="true"' : ''}
+      data-id="${v.id}" data-campo="${col.k}" data-original="${texto}">${punto}${texto}</span></td>`;
+  }).join('');
+  const ticks = ETAPAS.map(([k, t]) => `<td class="col-tick">
+    <button class="tick" data-id="${v.id}" data-etapa="${k}" aria-pressed="${!!etapasDe(v)[k]}"
+      title="${t}" aria-label="${t}${etapasDe(v)[k] ? ': hecho' : ': pendiente'}">✓</button></td>`).join('');
+  return `<tr class="${/cancel/i.test(v.estado || '') ? 'cancelada' : ''}">${celdas}${ticks}
+    <td class="col-acc actions"><button class="btn mini" data-viaje="${v.id}">Ver</button>
+    ${editable ? `<button class="btn mini" data-borrar-viaje="${v.id}">✕</button>` : ''}</td></tr>`;
+}
+
+function bloqueDia(fecha, viajes) {
+  const editable = sesion.rol === 'admin';
+  const cabeza = `<div class="dia-titulo">
+      <h3>${esc(fechaEncabezado(fecha))}</h3>
+      <span class="cuenta">${viajes.length} viaje(s)</span>
+      ${editable ? `<button class="btn mini" data-nuevo="${fecha}">+ Agregar viaje</button>` : ''}
+    </div>`;
+  if (!viajes.length) {                       // los días sin viajes no estorban
+    return editable
+      ? `<div class="dia-vacio"><b>${esc(fechaEncabezado(fecha))}</b><span>sin viajes</span>
+         <button class="btn mini" data-nuevo="${fecha}">+ Agregar viaje</button></div>`
+      : '';
+  }
+  return `<div class="dia-bloque">${cabeza}
+    <div class="hoja-wrap"><table class="hoja">
+      <thead><tr>
+        ${COLUMNAS_HOJA.map(c => `<th style="min-width:${c.ancho}px">${esc(c.t)}</th>`).join('')}
+        ${ETAPAS.map(([, t]) => `<th class="col-tick">${esc(t)}</th>`).join('')}
+        <th class="col-acc"></th>
+      </tr></thead>
+      <tbody>${viajes.map(filaHoja).join('')}</tbody>
+    </table></div></div>`;
+}
+
+/* Guarda una celda editada. Devuelve true si algo cambió. */
+function editarCampoViaje(id, campo, valor) {
+  const v = DB.viajes.find(x => x.id === id);
+  if (!v || String(v[campo] || '') === valor) return false;
+  v[campo] = valor;
+  v.modificado = new Date().toISOString();
+  guardar();
+  const choques = conflictos(v);
+  if (choques.length && ['unidadId', 'remolqueId', 'conductorId', 'horaSalida'].includes(campo)) {
+    toast(`Guardado, pero ojo: ese día quedan ${choques.length} viaje(s) encimados con la misma unidad, caja u operador.`, 5000);
+  } else {
+    toast('Guardado.', 1200);
+  }
+  return true;
+}
+
+function marcarEtapa(id, etapa, boton) {
+  if (sesion.rol !== 'admin') return;
+  const v = DB.viajes.find(x => x.id === id);
+  if (!v) return;
+  v.estatus = v.estatus || {};
+  v.estatus[etapa] = !v.estatus[etapa];
+  if (etapa === 'entregado' && !/cancel/i.test(v.estado || '')) {
+    v.estado = v.estatus.entregado ? 'Entregado' : DB.catalogos.estadosViaje[0];
+  }
+  v.modificado = new Date().toISOString();
+  guardar();
+  const nombre = (ETAPAS.find(e => e[0] === etapa) || [])[1] || etapa;
+  boton.setAttribute('aria-pressed', String(!!v.estatus[etapa]));
+  boton.setAttribute('aria-label', `${nombre}: ${v.estatus[etapa] ? 'hecho' : 'pendiente'}`);
+  renderPanel();
+}
+
+function renderHoja(datos, cont) {
+  const ini = inicioSemana(estadoUI.ancla), fin = addDias(ini, 6);
+  $('#periodoLabel').textContent = `Semana del ${fechaCorta(ini)} al ${fechaCorta(fin)}`;
+  let html = '';
+  for (let i = 0; i < 7; i++) {
+    const f = addDias(ini, i);
+    html += bloqueDia(f, ordenarViajes(datos.filter(v => v.fecha === f)));
+  }
+  cont.innerHTML = html || '<div class="panel"><div class="empty">No hay viajes esta semana.</div></div>';
+}
+
 /* ---------------- Render: Schedule ---------------- */
 function renderSchedule() {
   const cont = $('#scheduleBody');
@@ -541,7 +688,10 @@ function renderSchedule() {
   const hoy = hoyISO();
   renderLeyenda(datos);
 
-  if (estadoUI.vista === 'semana') {
+  if (estadoUI.vista === 'hoja') {
+    renderHoja(datos, cont);
+
+  } else if (estadoUI.vista === 'semana') {
     const ini = inicioSemana(estadoUI.ancla);
     const fin = addDias(ini, 6);
     $('#periodoLabel').textContent = `Semana del ${fechaCorta(ini)} al ${fechaCorta(fin)}`;
@@ -592,6 +742,7 @@ function renderSchedule() {
         { t: 'Origen', v: v => esc(v.origen) },
         { t: 'Destino', v: v => esc(v.destino) },
         { t: 'Cliente', v: v => conPunto(colorCliente(v.cliente), v.cliente) },
+        { t: 'Facturas', v: v => esc(v.facturas || v.referencia) },
         { t: 'Tractor', v: v => esc(nombreUnidad(v.unidadId)) },
         { t: 'Remolque', v: v => esc(nombreUnidad(v.remolqueId)) },
         { t: 'Operador', v: v => conPunto(colorConductor(v.conductorId), nombreConductor(v.conductorId)) },
@@ -602,7 +753,18 @@ function renderSchedule() {
       <p class="hint">${lista.length} viaje(s)</p></div>`;
   }
 
-  cont.onclick = e => {
+}
+
+/* Los manejadores se enganchan una sola vez al contenedor, que no se
+   reemplaza entre dibujados (focusout no funciona como propiedad onX). */
+function conectarSchedule() {
+  const cont = $('#scheduleBody');
+
+  cont.addEventListener('click', e => {
+    const tick = e.target.closest('.tick');
+    if (tick) return marcarEtapa(tick.dataset.id, tick.dataset.etapa, tick);
+    const borrar = e.target.closest('[data-borrar-viaje]');
+    if (borrar) return eliminarViaje(borrar.dataset.borrarViaje);
     const ver = e.target.closest('[data-viaje]');
     if (ver) return verViaje(ver.dataset.viaje);
     const ed = e.target.closest('[data-editar-viaje]');
@@ -611,7 +773,36 @@ function renderSchedule() {
     if (nuevo) return editarViaje(null, { fecha: nuevo.dataset.nuevo });
     const dia = e.target.closest('[data-dia]');
     if (dia && sesion.rol === 'admin') return editarViaje(null, { fecha: dia.dataset.dia });
-  };
+  });
+
+  /* Edición directa sobre la hoja: se guarda al salir de la celda */
+  cont.addEventListener('focusout', e => {
+    const cel = e.target.closest && e.target.closest('.cel[contenteditable]');
+    if (!cel) return;
+    const valor = cel.textContent.replace(/\s+/g, ' ').trim();
+    if (valor === cel.dataset.original) return;
+    if (editarCampoViaje(cel.dataset.id, cel.dataset.campo, valor)) {
+      cel.dataset.original = valor;
+      if (cel.dataset.campo === 'cliente') {                      // el color sigue al cliente
+        cel.innerHTML = `<span class="punto" style="--c:${colorCliente(valor) || 'transparent'}"></span>${esc(valor)}`;
+        renderLeyenda(viajesFiltrados());
+      }
+    }
+  });
+  cont.addEventListener('keydown', e => {
+    const cel = e.target.closest && e.target.closest('.cel[contenteditable]');
+    if (!cel) return;
+    if (e.key === 'Enter') { e.preventDefault(); cel.blur(); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cel.textContent = cel.dataset.original;
+      cel.blur();
+    }
+  });
+  cont.addEventListener('change', e => {
+    const sel = e.target.closest && e.target.closest('select[data-campo]');
+    if (sel) editarCampoViaje(sel.dataset.id, sel.dataset.campo, sel.value);
+  });
 }
 
 const conPunto = (color, texto) => texto
@@ -944,6 +1135,7 @@ function editarPlantilla(id) {
     { k: 'origen', t: 'Origen', valor: p.origen || '', req: true, lista: lugares() },
     { k: 'destino', t: 'Destino', valor: p.destino || '', req: true, lista: lugares() },
     { k: 'cliente', t: 'Cliente', valor: p.cliente || '', lista: nombresCliente() },
+    { k: 'stop', t: 'Stop', valor: p.stop || '' },
     { k: 'estado', t: 'Estado inicial', tipo: 'select', opciones: DB.catalogos.estadosViaje, valor: p.estado || DB.catalogos.estadosViaje[0], vacio: false },
     { k: 'unidadId', t: 'Tractor', tipo: 'select', opciones: opcionesUnidad('Tractor'), valor: p.unidadId || '', vacio: '— sin asignar —' },
     { k: 'remolqueId', t: 'Remolque / caja', tipo: 'select', opciones: opcionesUnidad('Remolque'), valor: p.remolqueId || '', vacio: '— sin asignar —' },
@@ -1029,6 +1221,7 @@ function dialogoGenerar(plantillaId = '') {
              origen: p.origen || '', destino: p.destino || '', cliente: p.cliente || '',
              unidadId: p.unidadId || '', remolqueId: p.remolqueId || '', conductorId: p.conductorId || '',
              carga: p.carga || '', tarifa: p.tarifa || '', notas: p.notas || '',
+             stop: p.stop || '', facturas: '', estatus: {},
              estado: p.estado || DB.catalogos.estadosViaje[0],
              creado: new Date().toISOString()
            });
@@ -1050,7 +1243,7 @@ const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function interpretarLinea(texto, fechaBase = hoyISO()) {
   let t = ' ' + String(texto).replace(/\s+/g, ' ').trim() + ' ';
   const v = { fecha: '', horaSalida: '', horaLlegada: '', origen: '', destino: '', cliente: '',
-    unidadId: '', remolqueId: '', conductorId: '', notas: '', _texto: texto };
+    unidadId: '', remolqueId: '', conductorId: '', stop: '', facturas: '', notas: '', estatus: {}, _texto: texto };
   const sacar = re => { const m = t.match(re); if (m) t = t.replace(m[0], ' '); return m; };
 
   /* --- unidades por número económico --- */
@@ -1422,7 +1615,7 @@ function mapearViajeIA(r) {
     unidadId: buscaUnidad(r.unidad, 'Tractor'),
     remolqueId: buscaUnidad(r.remolque, 'Remolque'),
     conductorId: c ? c.id : '',
-    carga: r.carga || '', referencia: r.referencia || '',
+    carga: r.carga || '', facturas: r.referencia || '', stop: '',
     notas: [r.notas, !c && r.conductor ? `Operador según la foto: ${r.conductor}` : '',
       !buscaUnidad(r.unidad, 'Tractor') && r.unidad ? `Unidad según la foto: ${r.unidad}` : '']
       .filter(Boolean).join(' — '),
@@ -1603,11 +1796,17 @@ const COLS_VIAJE = [
   { titulo: 'fecha', valor: v => v.fecha }, { titulo: 'horaSalida', valor: v => v.horaSalida },
   { titulo: 'horaLlegada', valor: v => v.horaLlegada }, { titulo: 'origen', valor: v => v.origen },
   { titulo: 'destino', valor: v => v.destino }, { titulo: 'cliente', valor: v => v.cliente },
-  { titulo: 'referencia', valor: v => v.referencia }, { titulo: 'tractor', valor: v => nombreUnidad(v.unidadId) },
+  { titulo: 'stop', valor: v => v.stop },
+  { titulo: 'facturas', valor: v => v.facturas || v.referencia }, { titulo: 'tractor', valor: v => nombreUnidad(v.unidadId) },
   { titulo: 'remolque', valor: v => nombreUnidad(v.remolqueId) },
   { titulo: 'conductor', valor: v => nombreConductor(v.conductorId) }, { titulo: 'carga', valor: v => v.carga },
   { titulo: 'millas', valor: v => v.millas }, { titulo: 'tarifa', valor: v => v.tarifa },
-  { titulo: 'estado', valor: v => v.estado }, { titulo: 'notas', valor: v => v.notas }
+  { titulo: 'estado', valor: v => v.estado },
+  { titulo: 'papeles', valor: v => etapasDe(v).papeles ? 'Sí' : '' },
+  { titulo: 'previo', valor: v => etapasDe(v).previo ? 'Sí' : '' },
+  { titulo: 'cruzo', valor: v => etapasDe(v).cruzo ? 'Sí' : '' },
+  { titulo: 'entregado', valor: v => etapasDe(v).entregado ? 'Sí' : '' },
+  { titulo: 'notas', valor: v => v.notas }
 ];
 
 const COLS_CLIENTE = [
@@ -1628,9 +1827,11 @@ function normalizarFecha(txt) {
   if (m) {
     let a = +m[1], b = +m[2], y = +m[3];
     if (y < 100) y += 2000;
-    // Formato latino día/mes/año; si el segundo número no puede ser mes, se invierte
-    let dia = a, mes = b;
-    if (b > 12 && a <= 12) { dia = b; mes = a; }
+    /* Se respeta el formato elegido por la compañía; si un número no puede ser
+       mes (mayor que 12), manda la realidad y no el ajuste. */
+    let mes, dia;
+    if (formatoFecha() === 'mdy') { mes = a; dia = b; } else { dia = a; mes = b; }
+    if (mes > 12 && dia <= 12) { const t = mes; mes = dia; dia = t; }
     return `${y}-${pad(mes)}-${pad(dia)}`;
   }
   return s;
@@ -1822,6 +2023,7 @@ function render() {
   $('#cfgContacto').value = DB.empresa.contacto || '';
   $('#cfgCaat').value = DB.empresa.caat || '';
   $('#cfgScac').value = DB.empresa.scac || '';
+  $('#cfgFormatoFecha').value = formatoFecha();
   $('#catEstadosViaje').value = DB.catalogos.estadosViaje.join(', ');
   $('#catEstadosUnidad').value = DB.catalogos.estadosUnidad.join(', ');
   $('#catTiposUnidad').value = DB.catalogos.tiposUnidad.join(', ');
@@ -1925,6 +2127,7 @@ function conectarEventos() {
   $('#capturaBtn').onclick = capturaRapida;
   $('#capturaRapida').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); capturaRapida(); } };
   $('#pegarTextoBtn').onclick = dialogoPegarTexto;
+  conectarSchedule();
   $('#leerFotoBtn').onclick = dialogoLeerFoto;
   $('#generarPlantillaBtn').onclick = () => dialogoGenerar();
   $('#generarPlantillaBtn2').onclick = () => dialogoGenerar();
@@ -1965,6 +2168,7 @@ function conectarEventos() {
       nombre: $('#cfgEmpresa').value.trim(), dispatch: $('#cfgDispatch').value.trim(),
       contacto: $('#cfgContacto').value.trim(), caat: $('#cfgCaat').value.trim(), scac: $('#cfgScac').value.trim()
     };
+    DB.preferencias = Object.assign({}, DB.preferencias, { formatoFecha: $('#cfgFormatoFecha').value });
     guardar(); render(); toast('Datos de la compañía guardados.');
   };
   $('#cargarAxlBtn').onclick = () => cargarInventarioAXL();
