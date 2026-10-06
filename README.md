@@ -95,3 +95,7 @@ Disponibilidad y precio pendientes de verificar en un registrador. Compra el dom
 - Nombre y correo de la cuenta ADMIN y configuración segura de su contraseña.
 - Ejemplo de Excel para definir las columnas finales de viajes y archivos maestros adicionales para importación revisada.
 - Hosting, PostgreSQL de producción, respaldos automáticos y registro/configuración de `axltransport.com`.
+
+### Configuración de cuenta por el operador del hosting
+
+El acceso admite usuario o correo electrónico. Para configurar una cuenta ADMIN desde el hosting, define temporalmente `AXL_ADMIN_LOGIN` y `AXL_ADMIN_PASSWORD_HASH` (formato scrypt del módulo `lib/password.ts`), y ejecuta `npx tsx scripts/configure-admin.ts` después de las migraciones. El script no tiene contraseña predeterminada, conserva las otras cuentas, registra la configuración sin hashes en auditoría y revoca sesiones previas del usuario actualizado. Retira ambas variables después de verificar el acceso; retira también `AXL_SETUP_TOKEN` cuando ya exista una cuenta. Los formularios normales mantienen el mínimo de 12 caracteres para contraseñas nuevas.

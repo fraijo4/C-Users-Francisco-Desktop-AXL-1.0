@@ -10,7 +10,7 @@ const fields:Record<Entity,Field[]>={
  trailers:[{key:'economicNumber',label:'Económico',required:true},{key:'category',label:'Categoría',options:['dry','reefer','flatbed']},{key:'lengthFt',label:'Longitud (pies)',type:'number',options:['45','48','53']},{key:'plateUs',label:'Placa USA'},{key:'plateMex',label:'Placa México'},{key:'notes',label:'Notas',wide:true,type:'textarea'}],
  drivers:[{key:'fullName',label:'Nombre completo',required:true}],
  destinations:[{key:'name',label:'Nombre',required:true},{key:'aliases',label:'Alias (separados por |)'},{key:'formattedAddress',label:'Dirección completa tal como debe aparecer',type:'textarea',wide:true,required:true},{key:'addressLine1',label:'Dirección línea 1'},{key:'addressLine2',label:'Dirección línea 2'},{key:'city',label:'Ciudad'},{key:'state',label:'Estado'},{key:'postalCode',label:'ZIP'},{key:'country',label:'País'},{key:'notes',label:'Notas',type:'textarea',wide:true}],
- users:[{key:'fullName',label:'Nombre completo',required:true},{key:'email',label:'Correo',type:'email',required:true},{key:'role',label:'Rol',options:['ADMIN','DISPATCHER','READ_ONLY']},{key:'password',label:'Contraseña nueva (mínimo 12 caracteres)',type:'password'}],
+ users:[{key:'fullName',label:'Nombre completo',required:true},{key:'email',label:'Usuario o correo',type:'text',required:true},{key:'role',label:'Rol',options:['ADMIN','DISPATCHER','READ_ONLY']},{key:'password',label:'Contraseña nueva (mínimo 12 caracteres)',type:'password'}],
  settings:[{key:'companyName',label:'Compañía',required:true},{key:'caat',label:'CAAT',required:true},{key:'scac',label:'SCAC',required:true},{key:'timezone',label:'Zona horaria',required:true},{key:'morningGreeting',label:'Saludo antes de las 12:00',required:true},{key:'afternoonGreeting',label:'Saludo desde las 12:00',required:true}],
  trips:[{key:'date',label:'Día del viaje',type:'date',required:true},{key:'tractorNumber',label:'Unidad',type:'tractor',required:true},{key:'driverName',label:'Operador (según unidad)',required:true},{key:'trailerNumber',label:'Remolque (opcional)',type:'trailer'},{key:'origin',label:'Origen'},{key:'destination',label:'Destino',required:true},{key:'client',label:'Cliente'},{key:'reference',label:'Referencia'},{key:'status',label:'Estado',options:['Programado','En tránsito','Completado','Cancelado']},{key:'notes',label:'Notas',type:'textarea',wide:true}]
 };
@@ -21,7 +21,7 @@ const cols:Record<string,[string,string][]>={
  trailers:[['economicNumber','Económico'],['displayType','Equipo'],['plateUs','Placa USA'],['plateMex','Placa México'],['active','Estado']],
  drivers:[['fullName','Operador'],['active','Estado']],
  destinations:[['name','Destino'],['formattedAddress','Dirección'],['aliases','Alias'],['active','Estado']],
- users:[['fullName','Nombre'],['email','Correo'],['role','Rol'],['active','Estado']],
+ users:[['fullName','Nombre'],['email','Usuario o correo'],['role','Rol'],['active','Estado']],
  trips:[['date','Día'],['tractorNumber','Unidad'],['driverName','Operador'],['trailerNumber','Remolque'],['origin','Origen'],['destination','Destino'],['client','Cliente'],['reference','Referencia'],['status','Estado'],['notes','Notas']],
  history:[['createdAt','Fecha'],['user','Usuario'],['rawCommand','Comando'],['status','Resultado']],
  audit:[['createdAt','Fecha'],['userId','Usuario ID'],['entity','Módulo'],['recordId','Registro']]
