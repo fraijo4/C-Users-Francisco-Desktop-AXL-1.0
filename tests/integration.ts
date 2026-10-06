@@ -14,7 +14,8 @@ async function main(){
  const control=new Pool({connectionString:process.env.DATABASE_URL});
  await control.query(`CREATE DATABASE "${name}"`);
  const client=new PrismaClient({adapter:new PrismaPg({connectionString:url.toString()})});
- const childEnv={...process.env,DATABASE_URL:url.toString()};
+ const setupCode=randomBytes(32).toString('hex');
+ const childEnv={...process.env,DATABASE_URL:url.toString(),AXL_SETUP_TOKEN:setupCode};
  let server:ReturnType<typeof spawn>|undefined;let browser:Awaited<ReturnType<typeof chromium.launch>>|undefined;
  let serverLog='';let count=0;
  const ok=(condition:unknown,message:string)=>{assert.ok(condition,message);count++;console.log('✓',message)};
@@ -27,15 +28,22 @@ async function main(){
   execFileSync('npm',['run','db:migrate'],{env:childEnv,stdio:'pipe'});
   execFileSync('npm',['run','db:seed'],{env:childEnv,stdio:'pipe'});
   const password=randomBytes(24).toString('hex');
-  const admin=await client.user.create({data:{email:'admin@example.test',fullName:'Administrador de prueba',passwordHash:hashPassword(password),role:'ADMIN'}});
-  const dispatcher=await client.user.create({data:{email:'dispatch@example.test',fullName:'Despachador de prueba',passwordHash:hashPassword(password),role:'DISPATCHER'}});
-  const reader=await client.user.create({data:{email:'read@example.test',fullName:'Consulta de prueba',passwordHash:hashPassword(password),role:'READ_ONLY'}});
   server=spawn('node',['node_modules/next/dist/bin/next','start','--hostname','0.0.0.0','--port','3101'],{env:childEnv,stdio:['ignore','pipe','pipe']});
   server.stdout!.on('data',d=>serverLog+=d);server.stderr!.on('data',d=>serverLog+=d);
   let ready=false;for(let i=0;i<100;i++){try{const r=await fetch(base+'/login');if(r.ok){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,200))}
   ok(ready,'Servidor de producción responde');
   ok((await request('health')).result.status==='ok','Comprobación de salud confirma conexión PostgreSQL');
   ok((await request('catalog')).response.status===401,'Catálogos requieren sesión');
+  const setupPage=await fetch(base+'/setup');ok(setupPage.ok,'Pantalla de activación disponible antes de la primera cuenta');
+  ok((await request('setup','POST',{token:'incorrect',email:'admin@example.test',fullName:'Administrador de prueba',password})).response.status===401,'Activación rechaza códigos incorrectos');
+  const setup=await request('setup','POST',{token:setupCode,email:'admin@example.test',fullName:'Administrador de prueba',password});
+  ok(setup.response.status===201,'Código privado permite activar la primera cuenta ADMIN');
+  const admin=await client.user.findUniqueOrThrow({where:{email:'admin@example.test'}});
+  ok(admin.role==='ADMIN'&&setup.response.headers.get('set-cookie')?.includes('HttpOnly'),'Activación crea sesión segura y rol ADMIN');
+  ok((await request('setup','POST',{token:setupCode,email:'other@example.test',fullName:'Otra cuenta',password})).response.status===404,'Activación no puede reutilizarse ni reemplazar cuentas');
+  const redirectPage=await fetch(base+'/setup',{redirect:'manual'});ok(redirectPage.status===307&&redirectPage.headers.get('location')==='/login','Pantalla de activación cerrada después de crear cuenta');
+  const dispatcher=await client.user.create({data:{email:'dispatch@example.test',fullName:'Despachador de prueba',passwordHash:hashPassword(password),role:'DISPATCHER'}});
+  const reader=await client.user.create({data:{email:'read@example.test',fullName:'Consulta de prueba',passwordHash:hashPassword(password),role:'READ_ONLY'}});
   const login=async(email:string)=>{const r=await request('login','POST',{email,password});ok(r.response.ok,'Inicio de sesión '+email+' ('+r.response.status+': '+JSON.stringify(r.result)+')');ok(r.response.headers.get('set-cookie')?.includes('HttpOnly'),'Cookie de sesión HttpOnly');return r.response.headers.get('set-cookie')!.split(';')[0]};
   const adminCookie=await login(admin.email), dispatchCookie=await login(dispatcher.email),readCookie=await login(reader.email);
   const cat=(await request('catalog','GET',undefined,adminCookie)).result;
@@ -56,7 +64,7 @@ async function main(){
   const history=(await request('history','GET',undefined,adminCookie)).result;
   ok(history.some((h:any)=>h.generatedText.includes('ZP63592CA')&&h.snapshot.tractorPlate==='ZP63592CA'),'Historial conserva placa original tras edición');
   const audit=(await request('audit','GET',undefined,adminCookie)).result;
-  ok(audit.some((a:any)=>a.before.plateUs==='ZP63592CA'&&a.after.plateUs==='TEST15CA'),'Auditoría conserva antes y después');
+  ok(audit.some((a:any)=>a.before?.plateUs==='ZP63592CA'&&a.after.plateUs==='TEST15CA'),'Auditoría conserva antes y después');
   execFileSync('npm',['run','db:seed'],{env:childEnv,stdio:'pipe'});
   ok((await client.tractor.findUnique({where:{id:t15.id}}))!.plateUs==='TEST15CA','Seed repetido respeta datos vigentes');
   const tripData={date:'2026-10-06',tractorNumber:'T15',driverName:t15.driver.fullName,trailerNumber:'4416',origin:'Origen capturado',destination:'Destino capturado',status:'Programado',client:'Cliente capturado'};

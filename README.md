@@ -34,7 +34,9 @@ El archivo `.env`, `.local`, `node_modules` y `.next` están excluidos de Git. N
 
 ### Primera cuenta administradora
 
-No hay cuentas o contraseñas predeterminadas. Ejecuta en una terminal privada, sustituyendo nombre y correo:
+No hay cuentas o contraseñas predeterminadas. Para un hosting sin terminal, configura un código aleatorio privado de al menos 32 caracteres en `AXL_SETUP_TOKEN`, abre `/setup` por HTTPS y elige nombre, correo y contraseña. No pongas ese código en una URL ni lo compartas en el chat. La activación se cierra cuando se crea la primera cuenta y no permite reemplazar usuarios existentes. Después elimina `AXL_SETUP_TOKEN` del hosting.
+
+Alternativamente, ejecuta en una terminal privada, sustituyendo nombre y correo:
 
 ```bash
 read -r -s -p 'Contraseña (mínimo 12 caracteres): ' axl_admin_password
@@ -77,6 +79,8 @@ Mantén la base PostgreSQL administrada independiente del disco temporal del hos
 `render.yaml` incluye una plantilla de despliegue para Render que solicita `DATABASE_URL` sin almacenarla en Git. No ha sido aplicada.
 
 Comando de construcción: `npm ci && npm run db:generate && npm run build`.
+
+Para Render, crea PostgreSQL en la misma región del servicio (Oregon) y guarda la Internal Database URL en `DATABASE_URL` desde Environment. La base gratuita de Render tiene caducidad; úsala para la revisión inicial y planifica PostgreSQL sin caducidad y respaldos para la operación diaria. Nunca pegues la conexión ni el código privado de activación en el chat. Con la base conectada y `AXL_SETUP_TOKEN` configurado, `/setup` permite crear la primera cuenta sin requerir acceso a una terminal del hosting.
 
 Antes del primer arranque, desde una terminal autorizada conectada a la base de producción: `npm run db:migrate`, `npm run db:seed` y `npm run admin:create` con contraseña por stdin. No ejecutes integración contra una base de producción.
 

@@ -1,6 +1,7 @@
 import { NextRequest,NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { randomBytes } from 'node:crypto';
+import { activationAllowed } from '@/lib/setup';
 import { Prisma } from '@prisma/client';
 import { db } from '@/lib/database';
 import { currentUser } from '@/lib/auth';
@@ -45,6 +46,23 @@ async function handle(req:NextRequest) {
   await db.loginAttempt.deleteMany({where:{key}});
   (await cookies()).set('axl_session',token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/',expires:expiresAt});
   return json({success:true});
+ }
+ if(entity==='setup'&&req.method==='POST') {
+  if(!process.env.AXL_SETUP_TOKEN||process.env.AXL_SETUP_TOKEN.length<32||await db.user.count())return json({message:'Activación no disponible.'},404);
+  const input=await body(req);
+  if(!activationAllowed(process.env.AXL_SETUP_TOKEN,input.token))return json({message:'Código de activación inválido.'},401);
+  const {password,...account}=schemas.users.parse({...input,role:'ADMIN',active:true});
+  if(!password)return json({message:'La contraseña es obligatoria.'},400);
+  const token=randomBytes(32).toString('hex');const expiresAt=new Date(Date.now()+12*60*60*1000);
+  await db.$transaction(async tx=>{
+   await tx.$executeRaw`SELECT pg_advisory_xact_lock(43884389)`;
+   if(await tx.user.count())throw new Error('La cuenta administradora ya fue activada.');
+   const user=await tx.user.create({data:{...account,passwordHash:hashPassword(password)}});
+   await tx.auditLog.create({data:{userId:user.id,entity:'users',recordId:user.id,after:{email:user.email,fullName:user.fullName,role:user.role,active:user.active}}});
+   await tx.session.create({data:{userId:user.id,tokenHash:digest(token),expiresAt}});
+  });
+  (await cookies()).set('axl_session',token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/',expires:expiresAt});
+  return json({success:true},201);
  }
  if(entity==='health'&&req.method==='GET') {await db.$queryRaw`SELECT 1`;return json({status:'ok'})}
  const user=await currentUser();if(!user)return json({message:'Inicia sesión.'},401);

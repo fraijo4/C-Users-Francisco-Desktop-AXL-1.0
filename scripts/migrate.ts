@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 // experimental migration adapter cannot deserialize PostgreSQL catalog NAME
 // columns. This transactional runner uses pg directly and verifies saved hashes.
 async function main(){
+ if(!process.env.DATABASE_URL)throw new Error("DATABASE_URL no está configurada. Agrégala en Environment del servicio.");
  const pool=new Pool({connectionString:process.env.DATABASE_URL});const client=await pool.connect();
  try{
   await client.query('BEGIN');
