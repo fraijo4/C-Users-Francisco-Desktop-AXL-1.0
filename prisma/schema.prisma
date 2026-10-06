@@ -1,0 +1,165 @@
+generator client {
+ provider = "prisma-client-js"
+ engineType = "client"
+}
+datasource db {
+ provider = "postgresql"
+ url = env("DATABASE_URL")
+}
+enum Role {
+ ADMIN
+ DISPATCHER
+ READ_ONLY
+}
+model User {
+ id String @id @default(cuid())
+ email String @unique
+ fullName String
+ passwordHash String
+ role Role @default(READ_ONLY)
+ active Boolean @default(true)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ sessions Session[]
+ history DispatchHistory[]
+ trips Trip[]
+}
+model Session {
+ id String @id @default(cuid())
+ tokenHash String @unique
+ userId String
+ user User @relation(fields:[userId],references:[id])
+ expiresAt DateTime
+ createdAt DateTime @default(now())
+}
+model LoginAttempt {
+ key String @id
+ count Int @default(0)
+ windowStart DateTime @default(now())
+}
+model Driver {
+ id String @id @default(cuid())
+ fullName String
+ active Boolean @default(true)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ tractors Tractor[]
+}
+model Tractor {
+ id String @id @default(cuid())
+ economicNumber String @unique
+ driverId String?
+ driver Driver? @relation(fields:[driverId],references:[id])
+ brand String?
+ year Int?
+ vin String? @unique
+ plateUs String?
+ plateMex String?
+ notes String?
+ active Boolean @default(true)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ history DispatchHistory[]
+}
+model Trailer {
+ id String @id @default(cuid())
+ economicNumber String @unique
+ category String
+ lengthFt Int
+ displayType String
+ plateUs String?
+ plateMex String?
+ notes String?
+ active Boolean @default(true)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ history DispatchHistory[]
+}
+model Destination {
+ id String @id @default(cuid())
+ name String @unique
+ addressLine1 String?
+ addressLine2 String?
+ city String?
+ state String?
+ postalCode String?
+ country String?
+ formattedAddress String
+ notes String?
+ active Boolean @default(true)
+ aliases DestinationAlias[]
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ history DispatchHistory[]
+}
+model DestinationAlias {
+ id String @id @default(cuid())
+ destinationId String
+ destination Destination @relation(fields:[destinationId],references:[id])
+ alias String
+ aliasNormalized String @unique
+}
+model Settings {
+ id String @id @default("global")
+ companyName String @default("AXL Transport")
+ caat String @default("43E8")
+ scac String @default("AJXT")
+ timezone String @default("America/Tijuana")
+ morningGreeting String @default("Buenos días")
+ afternoonGreeting String @default("Buenas tardes")
+ updatedAt DateTime @updatedAt
+}
+model DispatchHistory {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id])
+ rawCommand String
+ tractorId String?
+ tractor Tractor? @relation(fields:[tractorId],references:[id])
+ trailerId String?
+ trailer Trailer? @relation(fields:[trailerId],references:[id])
+ destinationId String?
+ destination Destination? @relation(fields:[destinationId],references:[id])
+ status String
+ generatedText String
+ snapshot Json
+ createdAt DateTime @default(now())
+}
+model AuditLog {
+ id String @id @default(cuid())
+ userId String
+ entity String
+ recordId String
+ before Json?
+ after Json?
+ createdAt DateTime @default(now())
+}
+model Trip {
+ id String @id @default(cuid())
+ date String
+ tractorNumber String
+ trailerNumber String?
+ driverName String
+ origin String?
+ destination String
+ client String?
+ reference String?
+ status String @default("Programado")
+ notes String?
+ active Boolean @default(true)
+ userId String
+ user User @relation(fields:[userId],references:[id])
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([date,active])
+}
+model ImportBatch {
+ id String @id @default(cuid())
+ userId String
+ entity String
+ rows Json
+ baselineHash String
+ backup Json?
+ confirmedAt DateTime?
+ createdAt DateTime @default(now())
+}

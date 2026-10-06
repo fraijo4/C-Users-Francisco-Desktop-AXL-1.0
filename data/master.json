@@ -1,0 +1,273 @@
+{
+  "tractors": [
+    {
+      "economicNumber": "T-03",
+      "fullName": "Alberto Herrera",
+      "brand": "Kenworth",
+      "year": 2016,
+      "vin": "1XKYD49XXGJ485237",
+      "plateUs": "ZP89543CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "T-12",
+      "fullName": "Juan Carlos Ruiz Alarcón",
+      "brand": "Freightliner",
+      "year": 2015,
+      "vin": "1FUJGBDV3FLFZ2286",
+      "plateUs": "ZP80041CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "T-14",
+      "fullName": "Martin López Briseño",
+      "brand": "Freightliner",
+      "year": 2018,
+      "vin": "3AKJGHDV8JSHN1903",
+      "plateUs": "ZP34130CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "T-15",
+      "fullName": "Alberto Villalbazo González",
+      "brand": "Freightliner",
+      "year": 2019,
+      "vin": "3AKJGLDV5KDKH4509",
+      "plateUs": "ZP63592CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "T-16",
+      "fullName": "Mario Omar Hinojosa Sayas",
+      "brand": "Freightliner",
+      "year": 2018,
+      "vin": "3AKJHHFG3JSJJ1297",
+      "plateUs": "ZP63582CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "T-17",
+      "fullName": "Omar Leonel Aceves Rodríguez",
+      "brand": "Peterbilt",
+      "year": 2018,
+      "vin": "1XPBD49X6JD480817",
+      "plateUs": "ZP56506CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "T-18",
+      "fullName": "Fernando Ruiz Alarcón",
+      "brand": "Freightliner",
+      "year": 2019,
+      "vin": "1FUBGKDRXKLKC9011",
+      "plateUs": "ZP56514CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "T-19",
+      "fullName": "Hugo Macías",
+      "brand": "International",
+      "year": 2019,
+      "vin": "3HCDZAPR2KL769044",
+      "plateUs": "ZP89544CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "T-20",
+      "fullName": "José Francisco Rodríguez Monrroy",
+      "brand": "Kenworth",
+      "year": 2022,
+      "vin": "1XKYD49X8NJ475285",
+      "plateUs": "ZP91625CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "T-21",
+      "fullName": "Rafael Alonso Quezada Navarez",
+      "brand": "Kenworth",
+      "year": 2022,
+      "vin": "1XKYD49X4NJ475106",
+      "plateUs": "ZP91626CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "VAT-05",
+      "fullName": "Cesar Hernandez",
+      "brand": null,
+      "year": null,
+      "vin": "1FUJA6CKX4LM61270",
+      "plateUs": null,
+      "plateMex": null
+    }
+  ],
+  "trailers": [
+    {
+      "economicNumber": "AXL-1917",
+      "category": "dry",
+      "lengthFt": 53,
+      "displayType": "Caja 53'",
+      "plateUs": "4TE1917CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-2035",
+      "category": "dry",
+      "lengthFt": 53,
+      "displayType": "Caja 53'",
+      "plateUs": "4TE2035CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-6087",
+      "category": "dry",
+      "lengthFt": 53,
+      "displayType": "Caja 53'",
+      "plateUs": "4VA6087CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-6273",
+      "category": "dry",
+      "lengthFt": 53,
+      "displayType": "Caja 53'",
+      "plateUs": "4VA6273CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-7097",
+      "category": "dry",
+      "lengthFt": 53,
+      "displayType": "Caja 53'",
+      "plateUs": "4EV7097CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-5116",
+      "category": "dry",
+      "lengthFt": 53,
+      "displayType": "Caja 53'",
+      "plateUs": "4VL5116CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-8101",
+      "category": "dry",
+      "lengthFt": 53,
+      "displayType": "Caja 53'",
+      "plateUs": "4WD8101CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-4329",
+      "category": "dry",
+      "lengthFt": 53,
+      "displayType": "Caja 53'",
+      "plateUs": "4WG4329CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-5373",
+      "category": "dry",
+      "lengthFt": 48,
+      "displayType": "Caja 48'",
+      "plateUs": "4BB5373CA",
+      "plateMex": "52-TX-6T"
+    },
+    {
+      "economicNumber": "AXL-4006",
+      "category": "dry",
+      "lengthFt": 45,
+      "displayType": "Caja 45'",
+      "plateUs": "4HG4006CA",
+      "plateMex": "267-XA-7"
+    },
+    {
+      "economicNumber": "AXL-6604",
+      "category": "reefer",
+      "lengthFt": 53,
+      "displayType": "Caja Refrigerada 53'",
+      "plateUs": "4PS6604CA",
+      "plateMex": "82TZ2Z"
+    },
+    {
+      "economicNumber": "R2",
+      "category": "reefer",
+      "lengthFt": 53,
+      "displayType": "Caja Refrigerada 53'",
+      "plateUs": "4XE4861CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-9665",
+      "category": "flatbed",
+      "lengthFt": 48,
+      "displayType": "Plataforma 48'",
+      "plateUs": "4TA9665CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-4069",
+      "category": "flatbed",
+      "lengthFt": 48,
+      "displayType": "Plataforma 48'",
+      "plateUs": "4TB4069CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-4416",
+      "category": "flatbed",
+      "lengthFt": 48,
+      "displayType": "Plataforma 48'",
+      "plateUs": "4WS4416CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-3178",
+      "category": "flatbed",
+      "lengthFt": 45,
+      "displayType": "Plataforma 45'",
+      "plateUs": "4LY3178CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-4680",
+      "category": "flatbed",
+      "lengthFt": 45,
+      "displayType": "Plataforma 45'",
+      "plateUs": "4SG4675CA",
+      "plateMex": "96-UA-9K"
+    },
+    {
+      "economicNumber": "AXL-5462",
+      "category": "flatbed",
+      "lengthFt": 45,
+      "displayType": "Plataforma 45'",
+      "plateUs": "4NT5462CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-2007",
+      "category": "flatbed",
+      "lengthFt": 45,
+      "displayType": "Plataforma 45'",
+      "plateUs": "4AZ2007CA",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-2234",
+      "category": "flatbed",
+      "lengthFt": 45,
+      "displayType": "Plataforma 45'",
+      "plateUs": "4XT2234",
+      "plateMex": null
+    },
+    {
+      "economicNumber": "AXL-6905",
+      "category": "flatbed",
+      "lengthFt": 45,
+      "displayType": "Plataforma 45'",
+      "plateUs": "4CT6905",
+      "plateMex": null
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { hashPassword,verifyPassword } from '../lib/password';
+import { schemas } from '../lib/validation';
+import { exportSheet,readSheet,safeCell } from '../lib/spreadsheet';
+test('password hashes use random salt and reject incorrect passwords',()=>{const a=hashPassword('strong-test-password');const b=hashPassword('strong-test-password');assert.notEqual(a,b);assert.equal(verifyPassword('strong-test-password',a),true);assert.equal(verifyPassword('wrong',a),false)});
+test('validator derives equipment type and rejects incompatible dimensions',()=>{assert.equal(schemas.trailers.parse({economicNumber:'4416',category:'flatbed',lengthFt:48}).displayType,"Plataforma 48'");assert.throws(()=>schemas.trailers.parse({economicNumber:'4416',category:'flatbed',lengthFt:53}));assert.throws(()=>schemas.trips.parse({date:'2026-02-30',tractorNumber:'T15',driverName:'A',destination:'B',status:'Programado'}))});
+test('spreadsheet export neutralizes formulas and import rejects unknown columns',async()=>{assert.equal(safeCell('=HYPERLINK("x")'),'\'=HYPERLINK("x")');const bytes=await exportSheet([{name:'A',formattedAddress:'Line 1\nLine 2',aliases:'B|C',active:true}],'xlsx',['name','formattedAddress','aliases','active']);const rows=await readSheet((bytes as Uint8Array).buffer as ArrayBuffer,'destinations');assert.equal(rows[0].formattedAddress,'Line 1\nLine 2');assert.deepEqual(rows[0].aliases,['B','C']);const bad=await exportSheet([{unknown:'x'}],'xlsx');await assert.rejects(()=>readSheet((bad as Uint8Array).buffer as ArrayBuffer,'tractors'))});
