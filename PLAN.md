@@ -154,3 +154,42 @@ Criterio de aceptación: la nueva auditoría da al menos B+ en móvil.
 | Fecha | Fase | Commit | Verificado |
 | --- | --- | --- | --- |
 | 2026-10-12 | Migración | `efdb032`, `da33def` | `/api/health` ok, login ok |
+
+---
+
+## Decisiones del 12 de octubre (cuestionario con el dueño)
+
+- Usuarios: solo oficina, 2 a 3 personas, en computadora. Rol Despachador para quien despacha.
+- Planes: se quedan en gratis (Vercel Hobby, Supabase gratis) por ahora. Riesgo aceptado: Supabase pausa el proyecto tras 7 días sin uso y no hay respaldos automáticos; Hobby no es para uso comercial.
+- Prioridades siguientes: panel de control y avisos dentro de la página.
+- Avisos: solo dentro de la página (sin correo ni WhatsApp). Falta definir cuáles (respondieron «otro» sin detalle).
+- Panel: unidades libres y ocupadas. Falta confirmar si también viajes de hoy/semana, pendientes y actividad.
+- Respaldo: botón de respaldo en la página para administradores.
+- Nombre «Unidades» / «Tractores»: se deja como está por ahora.
+
+## Fase 7: Seguridad y continuidad (antes de uso diario)
+
+- [ ] Cambiar la contraseña `admin` por una de 12+ caracteres desde Usuarios
+- [ ] Crear las cuentas de las 2 a 3 personas de oficina (rol Despachador)
+- [ ] Mantener despierta la base gratis: tarea diaria de Vercel que llama a `/api/health` (evita la pausa de 7 días)
+- [ ] Botón «Descargar respaldo» (solo ADMIN): un Excel con todos los catálogos, viajes, historial y auditoría
+- [ ] Probar el respaldo restaurándolo en una base local
+- [ ] Borrar `AXL_SETUP_TOKEN` de Vercel
+- [ ] Quitar `transporteraxl.vercel.app` (nombre mal escrito)
+- [ ] Actualizar `HANDOVER.md`
+- [ ] Decidir y registrar dominio propio (`axltransport.com`)
+
+## Fase 8: Panel de control
+
+- [ ] Nueva sección «Panel» como pantalla de inicio
+- [ ] Unidades libres y ocupadas hoy (tractores y remolques con y sin viaje)
+- [ ] (Por confirmar) Viajes de hoy y de la semana
+- [ ] (Por confirmar) Pendientes por documento
+- [ ] (Por confirmar) Actividad reciente
+
+## Fase 9: Avisos dentro de la página
+
+- [ ] Definir los avisos con el dueño
+- [ ] Campana con contador en la barra superior
+- [ ] Lista de pendientes en el panel
+- [ ] Si incluye vencimientos: agregar fechas a tractores y remolques (migración aditiva)
