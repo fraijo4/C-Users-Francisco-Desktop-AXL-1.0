@@ -90,3 +90,35 @@ th,.badge,small,.eyebrow,.section-note,.stat span,.topbar .status,.date-label,.e
 
 .primary-link{display:inline-block;background:var(--green);color:#fff;padding:12px 18px;border-radius:7px;text-decoration:none;font-weight:600}
 .backup-panel{margin-top:16px}
+
+/* Chips: placas y ejemplos de comando en filas compactas */
+.chips,.chips.examples{flex-wrap:nowrap}
+.chips{display:flex;align-items:center;gap:8px;margin-top:14px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chips-label{flex:none;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.chip{flex:none;border:1px solid var(--line);border-radius:99px;background:#fff;color:var(--ink);padding:8px 14px;font-size:14px;white-space:nowrap}
+.chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.examples{margin-top:10px}
+
+/* Carga con la forma de la página y estados vacíos con acción */
+.skeleton{display:grid;gap:12px;padding:4px 0}
+.skeleton i{display:block;border-radius:10px;background:linear-gradient(90deg,#e8eee3 25%,#f4f7ef 50%,#e8eee3 75%);background-size:200% 100%;animation:axl-shimmer 1.3s infinite linear}
+.skeleton-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.skeleton-stats i{height:72px}
+.skeleton-panel{height:180px}
+.skeleton-bar{height:44px}
+.skeleton-card{height:84px}
+@keyframes axl-shimmer{to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.skeleton i{animation:none}}
+.empty p{margin:0 0 14px}
+.trip-empty{display:grid;justify-items:start;gap:12px}
+.trip-empty p{margin:0}
+.more-cards{width:100%;min-height:48px;font-size:15px;font-weight:600}
+
+@media(max-width:760px){
+  .empty{padding:32px 16px}
+  .trip-empty button{min-height:44px}
+  .tag{font-size:12px}
+  .data-card-main span.tags{flex-wrap:nowrap;overflow:hidden;max-height:1.9em}
+  .skeleton-stats i{height:64px}
+}

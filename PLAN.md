@@ -84,7 +84,7 @@ Objetivo: generar y copiar un despacho sin desplazarse. Esfuerzo bajo.
 Archivos: `components/Dashboard.tsx`, `app/globals.css`
 
 - [x] En móvil, las 4 cifras en una sola fila compacta
-- [ ] Ejemplos de comando y selector de placas en una fila de chips (pendiente)
+- [x] Ejemplos de comando y selector de placas en dos filas de chips con desplazamiento lateral (AXL2)
 - [x] Botón «Copiar mensaje» fijo abajo mientras haya mensaje
 - [x] Etiqueta «Consulta directa» quitada
 
@@ -128,7 +128,7 @@ Tareas
 - [x] «Guardar N cambios» muestra los pendientes (AXL2)
 - [x] Selector de mes en español (AXL2)
 - [x] Sin cambios en expectedUpdatedAt, aviso al salir y exportaciones (AXL2)
-- [ ] Prueba en base local: crear, editar, cambiar de día y retirar un viaje desde 390 px
+- [x] Prueba en base local (Postgres local, 390 px): crear, editar operador/tractor/remolque/notas, cambiar de día y retirar; `npm run test:integration` 85 verificaciones en verde (AXL2)
 
 Criterio de aceptación: un viaje se captura completo en el teléfono sin desplazamiento lateral; `npm run test:integration` en verde en local.
 
@@ -140,8 +140,8 @@ Objetivo: que un usuario nuevo entienda la app sin explicación. Esfuerzo bajo.
 
 - [ ] Decidir el nombre: «Tractores» o «Unidades», y usarlo igual en menú, tablas, tarjetas y ayuda *(decisión de ustedes)*
 - [x] Línea «AXL TRANSPORT DISPATCH» repetida quitada
-- [ ] Indicador de carga con forma de la página en vez de «Cargando…»
-- [ ] Estados vacíos con acción («No hay viajes · Agregar viaje»)
+- [x] Carga con la forma de la página (esqueletos) en lugar de «Cargando…» (AXL2)
+- [x] Estados vacíos con acción: «Agregar el primer viaje», «+ Agregar registro» y «Quitar filtro» (AXL2)
 - [x] Ícono y manifiesto para instalar la app en el teléfono
 - [ ] Repetir la auditoría con Playwright y comparar contra la del 12 de octubre
 

@@ -113,7 +113,7 @@ export default function TripsBoard({catalog,editable,admin,onDirtyChange}:{catal
   <p className="section-note">Edita las celdas y guarda cada fila o todos los cambios. Tab pasa a la siguiente celda; Ctrl + Enter guarda la fila. Stop y las marcas de seguimiento admiten texto.{!editable&&' Tu cuenta tiene acceso de solo lectura.'}{hasWeekendTrips&&!weekends&&' Se muestran los días de fin de semana que tienen viajes.'}</p>
   {error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
   {choices.map(([id,values])=><datalist id={id} key={id}>{[...new Set(values.filter(Boolean))].map(value=><option value={value} key={value}/>)}</datalist>)}
-  {loading?<div className="loading">Cargando viajes…</div>:days.map(date=>{
+  {loading?<div className="skeleton" role="status" aria-label="Cargando viajes"><i className="skeleton-bar"/><i className="skeleton-card"/><i className="skeleton-card"/><i className="skeleton-card"/></div>:days.map(date=>{
    const dayRows=inWeek.filter(row=>row.groupDate===date&&(!filter||JSON.stringify(row).toLocaleLowerCase('es').includes(filter.toLocaleLowerCase('es'))));
    return <section key={date} className="trip-day panel" aria-label={tripDayLabel(date)}>
     <div className="trip-day-heading"><div><h2>{tripDayLabel(date)}</h2><span className="muted">{dayRows.length} {dayRows.length===1?'viaje':'viajes'}</span></div>{editable&&<button disabled={busy} onClick={()=>add(date)}>+ Agregar viaje</button>}</div>
@@ -138,7 +138,7 @@ export default function TripsBoard({catalog,editable,admin,onDirtyChange}:{catal
       </div></td></tr>}
      </Fragment>)}
     </tbody></table></div>}
-    {!dayRows.length&&<p className="trip-empty">{filter?'Sin coincidencias para este día.':'No hay viajes registrados para este día.'}</p>}
+    {!dayRows.length&&<div className="trip-empty"><p>{filter?'Sin coincidencias para este día.':'No hay viajes registrados para este día.'}</p>{editable&&!filter&&<button disabled={busy} onClick={()=>add(date)}>+ Agregar el primer viaje</button>}</div>}
    </section>;
   })}
   {compact&&editable&&dirty.length>0&&!sheetRow&&<div className="trip-savebar"><button className="primary" disabled={busy} onClick={()=>void save(dirty)}>{saveLabel}</button></div>}
