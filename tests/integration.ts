@@ -133,7 +133,7 @@ async function main(){
   browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox'],headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:1050}});const consoleErrors:string[]=[];page.on('pageerror',e=>consoleErrors.push(e.message));
   await page.goto(base+'/login');await page.getByLabel('Usuario o correo').fill(admin.email);await page.getByLabel('Contraseña',{exact:true}).fill(password);await page.getByRole('button',{name:'Ingresar'}).click();
-  await page.getByRole('heading',{name:'Todo listo para salir.'}).waitFor();await page.getByLabel('Unidad + remolque + destino (opcional)').fill('T-15 4416 Houston');await page.getByRole('button',{name:'Generar despacho'}).click();await page.locator('.result').filter({hasText:'TEST15CA'}).waitFor();
+  await page.getByRole('heading',{name:'Todo listo para salir.'}).waitFor();await page.getByLabel('Escribe tractor, remolque y destino').fill('T-15 4416 Houston');await page.getByRole('button',{name:'Generar despacho'}).click();await page.locator('.result').filter({hasText:'TEST15CA'}).waitFor();
   ok(await page.locator('.result').innerText().then(t=>t.includes('Houston')||t.includes('HOUSTON')),'Navegador genera y muestra el mensaje');
   await mkdir('/workspace/artifacts',{recursive:true});await page.screenshot({path:'/workspace/artifacts/axl-despacho-desktop.png',fullPage:true});
   await page.getByRole('button',{name:'Viajes por día',exact:true}).click();
