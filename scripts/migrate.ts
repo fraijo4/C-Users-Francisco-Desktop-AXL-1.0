@@ -7,7 +7,12 @@ import { createHash } from 'node:crypto';
 // columns. This transactional runner uses pg directly and verifies saved hashes.
 async function main(){
  if(!process.env.DATABASE_URL)throw new Error("DATABASE_URL no está configurada. Agrégala en Environment del servicio.");
- const pool=new Pool({connectionString:process.env.DATABASE_URL});const client=await pool.connect();
+ // Mismo criterio de SSL que lib/database.ts: solo se verifica si hay DATABASE_CA(_FILE).
+ const caFile=process.env.DATABASE_CA_FILE;
+ const ca=process.env.DATABASE_CA?.replace(/\\n/g,'\n')||(caFile?await readFile(caFile,'utf8'):undefined);
+ let connectionString=process.env.DATABASE_URL;
+ if(ca){const url=new URL(connectionString);for(const key of ['sslmode','sslcert','sslkey','sslrootcert','uselibpqcompat'])url.searchParams.delete(key);connectionString=url.toString()}
+ const pool=new Pool({connectionString,...(ca?{ssl:{ca,rejectUnauthorized:true}}:{})});const client=await pool.connect();
  try{
   await client.query('BEGIN');
   await client.query('SELECT pg_advisory_xact_lock(43884388)');
