@@ -1,0 +1,86 @@
+/* Ajustes de móvil y legibilidad. Se carga después de globals.css para poder sobreescribirlo. */
+
+/* Tamaños mínimos de letra (todas las pantallas) */
+th,.badge,small,.eyebrow,.section-note,.stat span,.topbar .status,.date-label,.examples .muted{font-size:12px}
+.sidebar .eyebrow{font-size:11px}
+.sidebar-footer,.sidebar-footer button{font-size:12px}
+.trip-save-state,.trip-day-heading .muted{font-size:12px}
+
+:root{--bottom-nav-height:0px}
+/* Elementos que solo existen en móvil */
+.tabbar,.sheet-backdrop,.copy-bar,.cards{display:none}
+
+/* Menú Importar / Exportar */
+.menu{position:relative}
+.menu summary{list-style:none;cursor:pointer;border:1px solid var(--line);border-radius:7px;padding:10px 14px;background:#fff;font-weight:600;font-size:13px;color:var(--ink);user-select:none}
+.menu summary::-webkit-details-marker{display:none}
+.menu summary::after{content:' ▾'}
+.menu[open] summary{border-color:var(--green)}
+.menu-list{position:absolute;left:0;top:calc(100% + 6px);z-index:15;display:grid;min-width:250px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 10px 30px #0a201f26}
+.toolbar .menu-list a,.menu-list .file-pick{display:block;position:relative;padding:11px 12px;border:0;border-radius:7px;background:transparent;font-size:13px;font-weight:400;text-decoration:none;color:var(--ink);cursor:pointer;flex-direction:row}
+.toolbar .menu-list a:hover,.menu-list .file-pick:hover{background:#f1f5ec}
+.file-pick input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.file-pick:focus-within{outline:2px solid var(--green)}
+
+/* Tarjetas de registros (solo móvil, ver abajo) */
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tag{background:#e7eee8;color:var(--green);border-radius:5px;padding:2px 7px;font-size:12px}
+
+@media(max-width:760px){
+  :root{--bottom-nav-height:calc(58px + env(safe-area-inset-bottom,0px))}
+  /* Navegación inferior: reemplaza el menú horizontal */
+  .sidebar{display:none}
+  .shell{grid-template-columns:1fr;padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+  .content{padding-bottom:120px}
+  .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:15;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+  .tabbar button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:58px;border:0;border-radius:0;background:transparent;font-size:12px;font-weight:600;color:var(--muted);padding:6px 2px}
+  .tabbar button span{font-size:20px;line-height:1}
+  .tabbar button.selected{color:var(--green);background:#eef4e8}
+  .sheet-backdrop{display:flex;align-items:flex-end;position:fixed;inset:0;z-index:40;background:#0a201f66}
+  .sheet{width:100%;display:grid;gap:4px;background:var(--paper);border-radius:16px 16px 0 0;padding:12px 12px calc(76px + env(safe-area-inset-bottom,0px))}
+  .sheet button{display:flex;align-items:center;gap:14px;min-height:54px;border:0;border-radius:10px;background:#fff;font-size:16px;font-weight:600;text-align:left}
+  .sheet button.selected{background:#e3eed8;color:var(--green)}
+  .sheet button span{width:24px;text-align:center;font-size:20px}
+  .sheet-user{margin:8px 4px 4px;font-size:13px;color:var(--muted)}
+
+  /* Barra superior y búsqueda */
+  .topbar{position:sticky;top:0;z-index:10}
+  .topbar input{flex:1;max-width:none}
+
+  /* Campos y botones cómodos para el pulgar; 16 px evita el zoom de iPhone */
+  input,select,textarea{font-size:16px}
+  .command-input{font-size:18px}
+  button,.toolbar a,.menu summary,.toolbar .menu-list a,.menu-list .file-pick{min-height:44px}
+  .toolbar{gap:8px}
+  .toolbar input{max-width:none;flex:1 1 100%}
+  .toolbar .primary{flex:1 1 auto}
+  .menu-list{position:fixed;left:12px;right:12px;top:auto;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:45}
+
+  /* Despacho */
+  .heading h1{font-size:26px}
+  .stats{grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px}
+  .stat{padding:10px 4px;text-align:center}
+  .stat strong{font-size:22px;margin:4px 0 2px}
+  .stat small{display:none}
+  .stat span{font-size:11px}
+  .result,.result-empty{min-height:160px}
+  .copy-bar{display:block;position:fixed;left:12px;right:12px;bottom:calc(70px + env(safe-area-inset-bottom,0px));z-index:12}
+  .copy-bar button{width:100%;min-height:52px;font-size:16px;box-shadow:0 8px 22px #0a201f40}
+
+  /* Tablas → tarjetas */
+  .data-table{display:none}
+  .cards{display:grid;gap:10px;padding:12px}
+  .data-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
+  .data-card-main{display:grid;gap:3px;min-width:0}
+  .data-card-main strong{font-size:15px;overflow-wrap:anywhere}
+  .data-card-main span{font-size:13px;overflow-wrap:anywhere}
+  .data-card-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+  .data-card-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+  .data-card-actions button{padding:8px 14px;font-size:14px}
+
+  /* Editor y ventanas como hoja inferior con botones fijos */
+  .modal-backdrop{place-items:end stretch;padding:0}
+  .modal{width:100%;max-height:92vh;border-radius:16px 16px 0 0;padding:20px 16px 0}
+  .actions{position:sticky;bottom:0;background:var(--paper);margin:16px -16px 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+  .actions button{flex:1;min-height:48px}
+}
