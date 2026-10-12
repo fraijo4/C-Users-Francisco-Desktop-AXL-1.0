@@ -27,9 +27,9 @@ Migración (hecho)
 - [x] Usuario `admin` creado (contraseña en `.env`, `AXL_ADMIN_PASSWORD`)
 
 Pendiente
-- [ ] Corregir los alias de destinos: hoy hay 9 filas con texto JSON; deben quedar los 18 alias reales con sus IDs originales *(requiere autorización)*
-- [ ] Probar un despacho con alias, por ejemplo `T15 4416 Ontario`, en base local
-- [ ] Borrar el despacho de prueba `T15 4416 Houston` del Historial *(requiere autorización)*
+- [x] Corregir los alias de destinos: 18 alias restaurados con sus IDs originales (12 oct)
+- [ ] Probar un despacho con alias, por ejemplo `T15 4416 Ontario`: pendiente, escribe en el Historial; hacerlo en base local o borrar el registro después
+- [x] Borrar los 2 despachos de prueba del Historial (12 oct)
 - [ ] Cambiar la contraseña de `admin` desde Usuarios
 - [ ] Borrar `AXL_SETUP_TOKEN` de Vercel (ya no sirve; `/setup` está cerrado)
 - [ ] Confirmar respaldos de Supabase (plan gratis: revisar retención) y hacer un respaldo manual
@@ -46,13 +46,13 @@ Objetivo: quitar las molestias más visibles con cambios pequeños de CSS. Esfue
 
 Archivos: `app/globals.css`, `components/Dashboard.tsx`
 
-- [ ] Campos (`input`, `select`, `textarea`) a 16 px en móvil, para evitar el zoom de iPhone
-- [ ] Botones y pestañas con al menos 44 px de alto en móvil
-- [ ] Etiquetas pequeñas: de 10–11 px a 12–13 px (`th`, `.badge`, `small`, `.eyebrow`)
-- [ ] Quitar la banda verde vacía del encabezado en Destinos, Usuarios y Configuración
-- [ ] Barra lateral de escritorio de altura completa en páginas largas
-- [ ] Despacho: al tocar «Generar despacho», desplazar la página hasta el mensaje
-- [ ] Despacho: «Copiar mensaje» muestra «Copiado» al tocarlo
+- [x] Campos a 16 px en móvil, para evitar el zoom de iPhone
+- [x] Botones y pestañas con al menos 44 px de alto en móvil
+- [x] Etiquetas pequeñas subidas a 12 px
+- [x] Banda verde vacía eliminada (el menú lateral ya no se muestra en móvil)
+- [x] Barra lateral de escritorio: no era un fallo; el corte se debía a la captura de página completa (la barra es fija en pantalla real)
+- [x] Despacho: al generar, la página se desplaza al mensaje (móvil)
+- [x] Despacho: «Copiar mensaje» muestra «Copiado ✓»
 
 Criterio de aceptación: en 390 px, ningún campo menor a 16 px ni botón menor a 44 px; tras generar, el mensaje queda en pantalla sin desplazarse a mano.
 
@@ -64,14 +64,14 @@ Objetivo: que todas las secciones se encuentren con el pulgar. Esfuerzo medio.
 
 Archivos: `components/Dashboard.tsx`, `app/globals.css`
 
-- [ ] Debajo de 760 px, ocultar el menú horizontal actual
-- [ ] Barra inferior fija con 4 entradas: Despacho, Viajes, Catálogos, Más
-- [ ] «Catálogos» abre la lista: Unidades, Remolques, Operadores, Destinos
-- [ ] «Más» abre la lista: Historial, Auditoría, Usuarios, Configuración, Cerrar sesión
-- [ ] Ocultar en «Más» lo que el rol no puede usar (por ejemplo Usuarios para `DISPATCHER`)
-- [ ] Respetar el área segura del iPhone (`env(safe-area-inset-bottom)`)
-- [ ] Búsqueda global como ícono que se expande en móvil
-- [ ] Escritorio sin cambios
+- [x] Debajo de 760 px, menú horizontal oculto
+- [x] Barra inferior fija con 4 entradas: Despacho, Viajes, Catálogos, Más
+- [x] «Catálogos» abre la lista: Unidades, Remolques, Operadores, Destinos
+- [x] «Más» abre la lista: Historial, Auditoría, Usuarios, Configuración, Cerrar sesión
+- [x] «Más» muestra solo lo que el rol puede usar (probado con admin; falta probar DISPATCHER y READ_ONLY)
+- [x] Área segura del iPhone respetada
+- [x] Búsqueda global: campo de 44 px fijo arriba (en lugar de ícono, más simple)
+- [x] Escritorio sin cambios (verificado)
 
 Criterio de aceptación: las 10 secciones se alcanzan en dos toques como máximo, sin deslizar el menú.
 
@@ -83,10 +83,10 @@ Objetivo: generar y copiar un despacho sin desplazarse. Esfuerzo bajo.
 
 Archivos: `components/Dashboard.tsx`, `app/globals.css`
 
-- [ ] En móvil, el formulario va primero; las 4 tarjetas de cifras pasan a una línea compacta
-- [ ] Ejemplos de comando y selector de placas en una fila de chips
-- [ ] Botón «Copiar mensaje» fijo abajo mientras haya mensaje
-- [ ] Quitar la etiqueta «Consulta directa»
+- [x] En móvil, las 4 cifras en una sola fila compacta
+- [ ] Ejemplos de comando y selector de placas en una fila de chips (pendiente)
+- [x] Botón «Copiar mensaje» fijo abajo mientras haya mensaje
+- [x] Etiqueta «Consulta directa» quitada
 
 Criterio de aceptación: en 390 px, del comando a «Copiado» sin desplazarse.
 
@@ -98,16 +98,16 @@ Objetivo: que Editar siempre esté a la vista. Esfuerzo medio.
 
 Archivos: `components/Dashboard.tsx`, `app/globals.css`
 
-- [ ] Debajo de 720 px, cada registro se ve como tarjeta: dato principal, 2 datos secundarios y Editar
-  - [ ] Unidades: número · marca y año / operador · placa
-  - [ ] Remolques: número · tipo / placa
-  - [ ] Operadores: nombre / estado
-  - [ ] Destinos: nombre / primera línea de la dirección / alias como etiquetas
-  - [ ] Usuarios, Historial y Auditoría
-- [ ] Destinos en escritorio: columna Dirección más ancha y alias como etiquetas
-- [ ] Editor en móvil: hoja de pantalla completa con Guardar y Cancelar fijos abajo
-- [ ] Agrupar Exportar CSV, Exportar Excel, Plantilla e Importar en un botón «Importar / Exportar»
-- [ ] Selector de archivo propio en español (en vez de «Choose File»)
+- [x] Debajo de 760 px, cada registro se ve como tarjeta con Editar visible
+  - [x] Unidades
+  - [x] Remolques
+  - [x] Operadores
+  - [x] Destinos (con alias como etiquetas)
+  - [x] Usuarios, Historial y Auditoría
+- [x] Destinos en escritorio: columna Dirección más ancha
+- [x] Editor en móvil: hoja inferior con Guardar y Cancelar fijos
+- [x] Importar y exportar agrupados en un menú «Importar / Exportar»
+- [x] Selector de archivo en español (ya no sale «Choose File»)
 
 Criterio de aceptación: Destinos en móvil mide menos de 5,000 px de alto; Editar visible en cada tarjeta sin desplazamiento lateral.
 
@@ -120,14 +120,14 @@ Objetivo: capturar y revisar viajes desde el teléfono. Esfuerzo alto.
 Archivos: `components/TripsBoard.tsx`, `lib/trip-calendar.ts` (solo lectura), `app/globals.css`
 
 Antes de empezar
-- [ ] Definir con ustedes qué 4 campos se ven primero en la tarjeta (propuesta: Cliente, Operador, Tractor/Remolque, Destino)
+- [x] Campos primarios de la tarjeta: Cliente, Operador, Tractor/Remolque, Destino
 
 Tareas
-- [ ] Debajo de 760 px, cada viaje como tarjeta dentro de su día; la cuadrícula de 12 columnas queda para escritorio
-- [ ] Tocar la tarjeta abre la hoja inferior con los 12 campos, color y notas
-- [ ] «Guardar cambios» dice cuántos hay pendientes («Guardar 3 cambios») en lugar de quedar gris
-- [ ] Selector de mes propio en español (en vez de «October 2026»)
-- [ ] Conservar sin cambios: `expectedUpdatedAt` (aviso 409), aviso al salir con cambios, exportación XLSX/CSV
+- [x] Debajo de 760 px, cada viaje como tarjeta; cuadrícula intacta en escritorio (AXL2)
+- [x] Tocar la tarjeta abre la hoja inferior con los 12 campos, color y notas (AXL2)
+- [x] «Guardar N cambios» muestra los pendientes (AXL2)
+- [x] Selector de mes en español (AXL2)
+- [x] Sin cambios en expectedUpdatedAt, aviso al salir y exportaciones (AXL2)
 - [ ] Prueba en base local: crear, editar, cambiar de día y retirar un viaje desde 390 px
 
 Criterio de aceptación: un viaje se captura completo en el teléfono sin desplazamiento lateral; `npm run test:integration` en verde en local.
@@ -139,10 +139,10 @@ Criterio de aceptación: un viaje se captura completo en el teléfono sin despla
 Objetivo: que un usuario nuevo entienda la app sin explicación. Esfuerzo bajo.
 
 - [ ] Decidir el nombre: «Tractores» o «Unidades», y usarlo igual en menú, tablas, tarjetas y ayuda *(decisión de ustedes)*
-- [ ] Quitar la línea «AXL TRANSPORT DISPATCH» repetida arriba de cada título
+- [x] Línea «AXL TRANSPORT DISPATCH» repetida quitada
 - [ ] Indicador de carga con forma de la página en vez de «Cargando…»
 - [ ] Estados vacíos con acción («No hay viajes · Agregar viaje»)
-- [ ] Ícono y manifiesto para instalar la app en la pantalla de inicio del teléfono
+- [x] Ícono y manifiesto para instalar la app en el teléfono
 - [ ] Repetir la auditoría con Playwright y comparar contra la del 12 de octubre
 
 Criterio de aceptación: la nueva auditoría da al menos B+ en móvil.

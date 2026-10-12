@@ -22,6 +22,8 @@ th,.badge,small,.eyebrow,.section-note,.stat span,.topbar .status,.date-label,.e
 .file-pick input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .file-pick:focus-within{outline:2px solid var(--green)}
 
+/* Dirección legible en tablas de escritorio */
+.data-table td pre{min-width:280px;max-width:440px;white-space:pre-wrap}
 /* Tarjetas de registros (solo móvil, ver abajo) */
 .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .tag{background:#e7eee8;color:var(--green);border-radius:5px;padding:2px 7px;font-size:12px}
@@ -45,7 +47,7 @@ th,.badge,small,.eyebrow,.section-note,.stat span,.topbar .status,.date-label,.e
 
   /* Barra superior y búsqueda */
   .topbar{position:sticky;top:0;z-index:10}
-  .topbar input{flex:1;max-width:none}
+  .topbar input{flex:1;max-width:none;font-size:16px;min-height:44px}
 
   /* Campos y botones cómodos para el pulgar; 16 px evita el zoom de iPhone */
   input,select,textarea{font-size:16px}
@@ -62,16 +64,17 @@ th,.badge,small,.eyebrow,.section-note,.stat span,.topbar .status,.date-label,.e
   .stat{padding:10px 4px;text-align:center}
   .stat strong{font-size:22px;margin:4px 0 2px}
   .stat small{display:none}
-  .stat span{font-size:11px}
+  .stat span{font-size:12px;line-height:1.25;display:block;min-height:2.5em}
   .result,.result-empty{min-height:160px}
   .copy-bar{display:block;position:fixed;left:12px;right:12px;bottom:calc(70px + env(safe-area-inset-bottom,0px));z-index:12}
   .copy-bar button{width:100%;min-height:52px;font-size:16px;box-shadow:0 8px 22px #0a201f40}
 
   /* Tablas → tarjetas */
   .data-table{display:none}
-  .cards{display:grid;gap:10px;padding:12px}
-  .data-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
-  .data-card-main{display:grid;gap:3px;min-width:0}
+  .cards{display:grid;gap:8px;padding:10px}
+  .data-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .data-card-main{display:grid;gap:2px;min-width:0;align-content:start}
+  .data-card-side .badge{align-self:flex-end}
   .data-card-main strong{font-size:15px;overflow-wrap:anywhere}
   .data-card-main span{font-size:13px;overflow-wrap:anywhere}
   .data-card-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
