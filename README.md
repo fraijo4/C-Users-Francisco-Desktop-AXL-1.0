@@ -10,7 +10,7 @@ Aplicación de despacho y organización de viajes para AXL Transport. Next.js 16
 - Catálogos de unidades, operadores, remolques y destinos, con activación/desactivación, alias y búsqueda universal.
 - Roles ADMIN, DISPATCHER y READ_ONLY verificados en el servidor. Sesiones de 12 horas con cookies HttpOnly, Secure en producción, protección de origen y límite de intentos de acceso.
 - Historial con copias de datos al momento del despacho y auditoría de modificaciones. No se incluyen contraseñas ni hashes en la API administrativa.
-- Viajes por día: unidad, operador, remolque, origen, destino, cliente, referencia, estado y notas. Columnas iniciales pendientes de ajustar al ejemplo del usuario.
+- Viajes por día: cuadrícula editable organizada por mes, semanas de viernes a jueves y bloques diarios. Conserva las 12 columnas del Excel: Cliente, Operador, Origen, Destino, Stop, Tractor, Remolque, Facturas, Papeles, Previo, Cruzó y Entregado. Permite viajes por asignar, equipo externo, selección independiente de operador, notas y color manual de fila. Guardado por fila o de todos los cambios, control de ediciones concurrentes y exportación semanal CSV/XLSX. Stop y seguimiento son texto; no se deducen estados. Los Excel de enero a octubre se usaron solo como referencia; no se importó su historial ni la lista de importaciones pendientes.
 - Exportación CSV/Excel. Importación XLSX administrativa con plantilla, vista previa, detección de duplicados, confirmación explícita, respaldo anterior y operación transaccional. Un cambio concurrente exige volver a revisar el archivo. Máximo 500 filas / 2 MB.
 
 ## Datos iniciales
@@ -93,9 +93,15 @@ Disponibilidad y precio pendientes de verificar en un registrador. Compra el dom
 ## Pendientes del usuario
 
 - Nombre y correo de la cuenta ADMIN y configuración segura de su contraseña.
-- Ejemplo de Excel para definir las columnas finales de viajes y archivos maestros adicionales para importación revisada.
+- Reglas de seguimiento de importaciones pendientes, futuros documentos y archivos maestros adicionales para importación revisada.
 - Hosting, PostgreSQL de producción, respaldos automáticos y registro/configuración de `axltransport.com`.
 
 ### Configuración de cuenta por el operador del hosting
 
 El acceso admite usuario o correo electrónico. Para configurar una cuenta ADMIN desde el hosting, define temporalmente `AXL_ADMIN_LOGIN` y `AXL_ADMIN_PASSWORD_HASH` (formato scrypt del módulo `lib/password.ts`), y ejecuta `npx tsx scripts/configure-admin.ts` después de las migraciones. El script no tiene contraseña predeterminada, conserva las otras cuentas, registra la configuración sin hashes en auditoría y revoca sesiones previas del usuario actualizado. Retira ambas variables después de verificar el acceso; retira también `AXL_SETUP_TOKEN` cuando ya exista una cuenta. Los formularios normales mantienen el mínimo de 12 caracteres para contraseñas nuevas.
+
+### Uso de la tabla de viajes
+
+Abre **Viajes por día**, elige mes y semana y pulsa **Agregar viaje** en el día correspondiente. Edita directamente las celdas; las sugerencias de operadores y equipos no cambian automáticamente otras columnas. Pulsa **Guardar fila** o **Guardar cambios** para persistir los datos. Tab avanza entre celdas y Ctrl/Cmd + Enter guarda la fila. **Notas y detalles** permite cambiar el día, elegir un color, conservar referencias adicionales o retirar un viaje sin borrar su auditoría. Se avisa antes de salir con cambios sin guardar.
+
+Las semanas pueden incluir días del mes anterior o siguiente. Sábado y domingo se muestran al activar la casilla o cuando ya tienen viajes. La exportación semanal incluye los siete días del intervalo. Usuarios de solo lectura consultan la cuadrícula sin controles de edición; administradores y despachadores pueden guardar viajes.

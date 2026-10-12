@@ -144,6 +144,13 @@ model Trip {
  destination String
  client String?
  reference String?
+ stop String?
+ invoices String?
+ paperwork String?
+ customsPreview String?
+ crossed String?
+ delivered String?
+ rowColor String @default("none")
  status String @default("Programado")
  notes String?
  active Boolean @default(true)

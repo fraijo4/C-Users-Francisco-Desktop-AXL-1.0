@@ -3,6 +3,7 @@ import { schemas,Entity } from './validation';
 import { normalizeDestination } from './dispatch';
 import { hashPassword } from './password';
 type Tx = Prisma.TransactionClient;
+export class RecordConflictError extends Error {}
 export const userSelect={id:true,email:true,fullName:true,role:true,active:true,createdAt:true,updatedAt:true};
 export async function listRecords(tx:Tx, entity:Entity) {
  switch(entity) {
@@ -12,7 +13,7 @@ export async function listRecords(tx:Tx, entity:Entity) {
   case 'destinations':return tx.destination.findMany({include:{aliases:true},orderBy:{name:'asc'}});
   case 'users':return tx.user.findMany({select:userSelect,orderBy:{fullName:'asc'}});
   case 'settings':return tx.settings.findMany();
-  case 'trips':return tx.trip.findMany({orderBy:[{date:'desc'},{createdAt:'desc'}]});
+  case 'trips':return tx.trip.findMany({orderBy:[{date:'asc'},{createdAt:'asc'},{id:'asc'}]});
  }
 }
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
@@ -47,14 +48,14 @@ export async function saveRecord(tx:Tx,entity:Entity,raw:unknown,userId:string,i
   }
   case 'settings':{const v=schemas.settings.parse(raw);after=await tx.settings.update({where:{id:'global'},data:v});break}
   case 'trips':{
-   const v=schemas.trips.parse(raw);
-   const tractor=await tx.tractor.findFirst({where:{economicNumber:v.tractorNumber,active:true},include:{driver:true}});
-   const original=before as {tractorNumber?:string;driverName?:string}|null;
-   const sameAssignment=original?.tractorNumber===v.tractorNumber&&original?.driverName===v.driverName;
-   if(!sameAssignment&&(!tractor||!tractor.driver?.active||tractor.driver.fullName!==v.driverName)) throw new Error('Unidad u operador no registrado; selecciona una unidad activa.');
-   if(v.trailerNumber&&!await tx.trailer.findFirst({where:{economicNumber:v.trailerNumber,active:true}})) throw new Error('Remolque no registrado o inactivo.');
+   const {expectedUpdatedAt,...v}=schemas.trips.parse(raw);
    // Preserve the original author when editing a trip.
-   after=id?await tx.trip.update({where:{id},data:v}):await tx.trip.create({data:{...v,userId}});break;
+   if(id){
+    const updated=await tx.trip.updateMany({where:{id,...(expectedUpdatedAt?{updatedAt:new Date(expectedUpdatedAt)}:{})},data:v});
+    if(!updated.count)throw new RecordConflictError('Este viaje cambió desde que lo abriste. Recarga la tabla antes de guardar.');
+    after=await tx.trip.findUniqueOrThrow({where:{id}});
+   }else after=await tx.trip.create({data:{...v,userId}});
+   break;
   }
  }
  await tx.auditLog.create({data:{userId,entity,recordId:after.id,...(before?{before:json(before)}:{}),after:json(after)}});

@@ -7,9 +7,10 @@ import { db } from '@/lib/database';
 import { currentUser } from '@/lib/auth';
 import { digest,hashPassword,verifyPassword } from '@/lib/password';
 import { generateDispatch } from '@/lib/dispatch';
-import { schemas,Entity } from '@/lib/validation';
-import { canWrite,listRecords,saveRecord } from '@/lib/records';
+import { schemas,Entity,tripDate } from '@/lib/validation';
+import { canWrite,listRecords,saveRecord,RecordConflictError } from '@/lib/records';
 import { exportSheet,readSheet,identity,importColumns } from '@/lib/spreadsheet';
+import { exportTripWorkbook,tripExportColumns,tripExportRows } from '@/lib/trip-sheet';
 export const runtime='nodejs';
 const dummyHash=hashPassword('dummy-login-timing-padding');
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'no-store'}});
@@ -100,7 +101,14 @@ async function handle(req:NextRequest) {
   else if(target in schemas&&target!=='settings')rows=await listRecords(db,target as Entity);
   else return json({message:'Exportación inválida.'},400);
   if(template&&!importColumns[target])return json({message:'Plantilla inválida.'},400);
-  const content=await exportSheet(template?[]:rows,format,template?importColumns[target]:undefined);
+  let content:string|Uint8Array;
+  if(target==='trips'){
+   const from=req.nextUrl.searchParams.get('from'),to=req.nextUrl.searchParams.get('to');
+   if(!!from!==!!to)return json({message:'Selecciona ambas fechas.'},400);
+   if(from&&to){tripDate.parse(from);tripDate.parse(to);if(from>to||(Date.parse(to)-Date.parse(from))/86400000>366)return json({message:'Rango de fechas inválido.'},400)}
+   rows=rows.filter(r=>r.active&&(!from||String(r.date)>=from)&&(!to||String(r.date)<=to));
+   content=format==='xlsx'?await exportTripWorkbook(rows,from||undefined,to||undefined):await exportSheet(tripExportRows(rows),'csv',tripExportColumns);
+  }else content=await exportSheet(template?[]:rows,format,template?importColumns[target]:undefined);
   return new NextResponse(content as BodyInit,{headers:{'Content-Type':format==='csv'?'text/csv; charset=utf-8':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="axl-${target}.${format}"`,'Cache-Control':'no-store'}});
  }
  if(entity==='import'&&req.method==='POST') {
@@ -149,6 +157,7 @@ async function handle(req:NextRequest) {
 }
 async function route(req:NextRequest) {
  try{return await handle(req)}catch(e){
+  if(e instanceof RecordConflictError)return json({message:e.message},409);
   if(e instanceof Prisma.PrismaClientKnownRequestError){
    if(e.code==='P2002')return json({message:'Ya existe ese económico, VIN, correo o alias.'},409);
    if(e.code==='P2034')return json({message:'Otra operación modificó los datos. Vuelve a intentar.'},409);
