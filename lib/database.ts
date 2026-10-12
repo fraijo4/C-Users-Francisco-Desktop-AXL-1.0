@@ -9,7 +9,7 @@ function poolConfig(){
  const max=Number(process.env.DATABASE_POOL_MAX)||(process.env.VERCEL?3:undefined);
  const caFile=process.env.DATABASE_CA_FILE;
  const ca=process.env.DATABASE_CA?.replace(/\\n/g,'\n')||(caFile?readFileSync(caFile,'utf8'):undefined);
- if(!ca)return {connectionString:raw,max};
+ if(!ca||!raw)return {connectionString:raw,max};
  const url=new URL(raw);
  for(const key of ['sslmode','sslcert','sslkey','sslrootcert','uselibpqcompat'])url.searchParams.delete(key);
  return {connectionString:url.toString(),max,ssl:{ca,rejectUnauthorized:true}};
