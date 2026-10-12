@@ -171,12 +171,12 @@ Criterio de aceptación: la nueva auditoría da al menos B+ en móvil.
 
 - [ ] Cambiar la contraseña `admin` por una de 12+ caracteres desde Usuarios
 - [ ] Crear las cuentas de las 2 a 3 personas de oficina (rol Despachador)
-- [ ] Mantener despierta la base gratis: tarea diaria de Vercel que llama a `/api/health` (evita la pausa de 7 días)
-- [ ] Botón «Descargar respaldo» (solo ADMIN): un Excel con todos los catálogos, viajes, historial y auditoría
-- [ ] Probar el respaldo restaurándolo en una base local
-- [ ] Borrar `AXL_SETUP_TOKEN` de Vercel
-- [ ] Quitar `transporteraxl.vercel.app` (nombre mal escrito)
-- [ ] Actualizar `HANDOVER.md`
+- [x] Mantener despierta la base gratis: tarea diaria de Vercel (15:00 UTC) que llama a `/api/health`
+- [x] Botón «Descargar respaldo completo» en Configuración (solo ADMIN): Excel con 10 hojas, sin contraseñas; probado en producción
+- [ ] Probar el respaldo restaurándolo en una base local (solo se validó el contenido del archivo; falta Docker)
+- [x] `AXL_SETUP_TOKEN` borrado de Vercel (12 oct)
+- [x] `transporteraxl.vercel.app` quitado del proyecto
+- [x] `HANDOVER.md` actualizado (producción en Vercel + Supabase)
 - [ ] Decidir y registrar dominio propio (`axltransport.com`)
 
 ## Fase 8: Panel de control
