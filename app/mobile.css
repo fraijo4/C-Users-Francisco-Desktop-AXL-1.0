@@ -122,3 +122,11 @@ th,.badge,small,.eyebrow,.section-note,.stat span,.topbar .status,.date-label,.e
   .data-card-main span.tags{flex-wrap:nowrap;overflow:hidden;max-height:1.9em}
   .skeleton-stats i{height:64px}
 }
+
+/* Despacho en teléfono: el botón Generar nunca queda bajo la barra inferior ni el teclado */
+.command-form button.primary{scroll-margin-bottom:calc(var(--bottom-nav-height) + 24px)}
+.command-input{scroll-margin-top:84px}
+@media(max-width:760px){
+ .chips.examples{margin-top:8px;margin-bottom:0}
+ .chips + .section-note,.chips.examples + .section-note{margin-top:12px}
+}
