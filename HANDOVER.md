@@ -1,6 +1,34 @@
 # AXL Transport — continuidad del trabajo en VS Code
 
-Actualizado: 12 de octubre de 2026, zona horaria America/Tijuana.
+Actualizado: 12 de octubre de 2026 (producción movida a Vercel + Supabase), zona horaria America/Tijuana.
+
+> ## ACTUALIZACIÓN (12 de octubre de 2026): producción ya no está en Render
+>
+> **El sitio de producción ahora es Vercel + Supabase.** Las secciones 2, 8 y 10 de abajo describen la etapa anterior (Render) y quedan como historia.
+>
+> | Elemento | Valor actual |
+> | --- | --- |
+> | Página | https://transportesaxl.vercel.app (también `axl-1-0.vercel.app`) |
+> | Proyecto Vercel | `axl-1-0` (cuenta personal `fraijo4`, plan Hobby) |
+> | Base de datos | Supabase, proyecto «AXL Project» (`lrebdhqzlmgkjhocyutw`, us-west-2, plan gratis) |
+> | Despliegue | Cada push a `main` despliega solo en Vercel |
+> | Render | Sigue encendido con los datos anteriores; fecha de apagado por decidir |
+>
+> **Instrucciones para agentes:** `AGENTS.md` se movió a `CLAUDE.md`.
+>
+> **Conexión a la base:** `DATABASE_URL` (pooler de Supabase, puerto 6543) y `DATABASE_CA` (certificado raíz de Supabase) están como variables sensibles en Vercel. El código verifica el certificado solo si existe `DATABASE_CA` o `DATABASE_CA_FILE`; en local y en Render no cambia nada. En Vercel el pool es de 3 conexiones.
+>
+> **Migraciones en Supabase:** se aplicaron con el mismo SQL y la tabla `_axl_migrations` con los sha256 correctos; `npm run db:migrate` las reconoce. Las tablas tienen RLS activado sin políticas, para cerrar la API pública de Supabase; la app entra con el rol `postgres`.
+>
+> **Secretos:** están en `.env` (ignorado por git) con claves `SUPABASE_*` y `AXL_ADMIN_*`. No se llaman `DATABASE_URL` a propósito, para que `npm run dev` y las pruebas no toquen producción.
+>
+> **Cuenta admin:** usuario `admin`. Su contraseña actual (`admin`) es provisional y débil; la app exige 12 caracteres, pero se fijó directo en la base a petición del dueño. **Cambiarla desde Usuarios antes de que otras personas usen la página.**
+>
+> **Datos:** se copiaron los catálogos desde Render (11 tractores, 21 remolques, 11 operadores, 49 destinos, 18 alias) conservando IDs y fechas. No hay viajes ni historial.
+>
+> **Continuidad (plan gratis):** Supabase gratis se pausa tras 7 días sin uso; una tarea diaria de Vercel (`vercel.json`, `crons`) llama a `/api/health` para evitarlo. No hay respaldos automáticos: Configuración tiene un botón «Descargar respaldo completo» (solo ADMIN) que baja un Excel con todo.
+>
+> **Plan de trabajo y avance:** ver `PLAN.md`.
 
 Este documento permite continuar sin tener el historial del chat. Describe lo que está construido, las decisiones del usuario, el despliegue y los siguientes pasos. Los conteos de producción corresponden a la última comprobación del 12 de octubre; pueden cambiar cuando el usuario capture información.
 

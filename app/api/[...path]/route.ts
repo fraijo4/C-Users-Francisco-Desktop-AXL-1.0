@@ -10,6 +10,7 @@ import { generateDispatch } from '@/lib/dispatch';
 import { schemas,Entity,tripDate } from '@/lib/validation';
 import { canWrite,listRecords,saveRecord,RecordConflictError } from '@/lib/records';
 import { exportSheet,readSheet,identity,importColumns } from '@/lib/spreadsheet';
+import { buildBackup } from '@/lib/backup';
 import { exportTripWorkbook,tripExportColumns,tripExportRows } from '@/lib/trip-sheet';
 export const runtime='nodejs';
 const dummyHash=hashPassword('dummy-login-timing-padding');
@@ -91,6 +92,13 @@ async function handle(req:NextRequest) {
   if(user.role!=='ADMIN')return json({message:'Permiso insuficiente.'},403);
   if(req.method!=='GET')return json({message:'Método no permitido.'},405);
   return json(entity==='history'?await db.dispatchHistory.findMany({include:{user:{select:{fullName:true}}},orderBy:{createdAt:'desc'},take:500}):await db.auditLog.findMany({orderBy:{createdAt:'desc'},take:500}));
+ }
+ if(entity==='backup'&&req.method==='GET') {
+  if(user.role!=='ADMIN')return json({message:'Permiso insuficiente.'},403);
+  const content=await buildBackup(user.fullName);
+  await db.auditLog.create({data:{userId:user.id,entity:'backup',recordId:'respaldo',after:{descargado:true}}});
+  const stamp=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Tijuana'}).format(new Date());
+  return new NextResponse(content as BodyInit,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="axl-respaldo-${stamp}.xlsx"`,'Cache-Control':'no-store'}});
  }
  if(entity==='export'&&req.method==='GET') {
   if(user.role!=='ADMIN')return json({message:'Permiso insuficiente.'},403);

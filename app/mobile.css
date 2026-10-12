@@ -87,3 +87,6 @@ th,.badge,small,.eyebrow,.section-note,.stat span,.topbar .status,.date-label,.e
   .actions{position:sticky;bottom:0;background:var(--paper);margin:16px -16px 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
   .actions button{flex:1;min-height:48px}
 }
+
+.primary-link{display:inline-block;background:var(--green);color:#fff;padding:12px 18px;border-radius:7px;text-decoration:none;font-weight:600}
+.backup-panel{margin-top:16px}
